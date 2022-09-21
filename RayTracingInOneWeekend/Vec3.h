@@ -1,16 +1,7 @@
 #pragma once
-#include <cassert>
 #include <cmath>
-#include <concepts>
-#include <random>
-#include <string>
 #include "Log.h"
-#include <fmt/format.h>
 
-#define GLM_FORCE_SSE2
-
-#define GLM_FORCE_INLINE
-#define GLM_MESSAGES GLM_ENABLE
 #include <glm/geometric.hpp>
 #include <glm/gtx/norm.hpp>
 
@@ -49,6 +40,12 @@ inline float RandomFloat(const float min = 0.0f, const float max = 1.0f)
 	return min + (float)(rand()) / (float)(RAND_MAX / (max - min));
 }
 
+inline int RandomInt(const int min, const int max)
+{
+	return static_cast<int>(RandomFloat((float)min, (float)max + 1.0f));
+}
+
+
 inline glm::vec3 RandomVec3(const float min = 0.0f, const float max = 1.0f)
 {
 	return { RandomFloat(min, max), RandomFloat(min, max), RandomFloat(min, max) };
@@ -65,27 +62,3 @@ inline glm::vec3 RandomNormalizedVector()
 {
 	return glm::normalize(RandomVec3());
 }
-
-
-
-
-//using Vec3 = vec3;
-//using glm::vec3 = vec3;
-//using glm::vec3 = vec3;
-
-inline void WriteColor1(const glm::vec3& color, const int samplesPerPixel)
-{
-	auto scale = 1.0f / (T)samplesPerPixel;
-	const glm::vec3 newColor = glm::sqrt(glm::clamp(color * scale, 0.0f, 1.0f));
-
-	LOG_FILE("{} {} {}", static_cast<int>(255.999f * newColor.x), static_cast<int>(255.999f * newColor.y), static_cast<int>(255.999f * newColor.z));
-}
-
-inline std::string WriteColor(const glm::vec3& color, const int samplesPerPixel)
-{
-	auto scale = 1.0f / (T)samplesPerPixel;
-	const glm::vec3 newColor = glm::sqrt(glm::clamp(color * scale, 0.0f, 1.0f));
-	return fmt::format("{} {} {}\n", static_cast<int>(255.999f * newColor.x), static_cast<int>(255.999f * newColor.y), static_cast<int>(255.999f * newColor.z));
-}
-
-

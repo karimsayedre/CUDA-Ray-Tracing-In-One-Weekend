@@ -82,6 +82,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AABB.cpp" />
+    <ClCompile Include="BVH.cpp" />
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="Dielectric.cpp" />
     <ClCompile Include="Hittable.cpp" />
@@ -95,6 +97,8 @@
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="Sphere.cpp" />
     <ClCompile Include="Vec3.cpp" />
+    <ClInclude Include="AABB.h" />
+    <ClInclude Include="BVH.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Dielectric.h" />
     <ClInclude Include="Hittable.h" />

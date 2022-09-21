@@ -2,7 +2,14 @@
 #define GLM_FORCE_SSE2
 
 #include <SFML/Graphics/Image.hpp>
+#include <thread>
+#include <SFML/Graphics/RenderWindow.hpp>
+#include <SFML/Graphics/Sprite.hpp>
+#include <SFML/Graphics/Texture.hpp>
+#include <SFML/System/Thread.hpp>
+#include <SFML/Window/Event.hpp>
 
+#include "BVH.h"
 #include "Camera.h"
 #include "Dielectric.h"
 #include "Hittable.h"
@@ -18,7 +25,7 @@
 inline HittableList RandomScene() {
 	HittableList world;
 
-	auto ground_material = std::make_shared<Lambert>(glm::vec3(0.5, 0.5, 0.5));
+	auto ground_material = std::make_shared<Metal>(glm::vec3(1.0f, 0.0f, 0.0f), 0.3f);
 	world.Add(std::make_shared<Sphere>(glm::vec3(0, -1000, 0), 1000, ground_material));
 
 	for (int a = -11; a < 11; a++) {
@@ -60,7 +67,7 @@ inline HittableList RandomScene() {
 	auto material3 = std::make_shared<Metal>(glm::vec3(0.7f, 0.6f, 0.5f), 0.0f);
 	world.Add(std::make_shared<Sphere>(glm::vec3(4, 1, 0), 1.0, material3));
 
-	return world;
+	return { std::make_shared<BVHNode>(world, 0.0, 1.0) };
 }
 
 
@@ -69,7 +76,7 @@ class Renderer
 public:
 
 
-    [[nodiscard]] inline const glm::vec3 RayColor(const Ray& ray, const Hittable& world, const int depth)
+	[[nodiscard]] inline const glm::vec3 RayColor(const Ray& ray, const Hittable& world, const int depth)
 	{
 		HitRecord hitRecord;
 		if (depth <= 0) return glm::vec3{};
@@ -83,49 +90,10 @@ public:
 			return {};
 		}
 		const glm::vec3 unitDirection = glm::normalize(ray.Direction());
-		auto t = (T)0.5 * (unitDirection.y + (T)1.0);
+		auto t = 0.5f * (unitDirection.y + 1.0f);
 		return (1.0f - t) * glm::vec3(1.0f) + t * glm::vec3(0.5f, 0.7f, 1.0f);
 	}
 
-	inline sf::Image Render(const uint32_t width, const uint32_t height)
-    {
-	    // Image
-    	float aspectRatio = (float)width / (float)height;
-    	constexpr int samplesPerPixel = 10;
-    	constexpr int maxDepth = 50;
-		sf::Image image;
-		image.create(width, height);
-    	// World
-    	HittableList world = RandomScene();
-
-		// Camera
-		Camera camera(glm::vec3(13.0f, 2.0f, 3.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), 20.0f, aspectRatio);
-
-
-		// Render
-		//std::string imageData = fmt::format("P3\n{} {}\n255\n", width, height);
-		//LOG_FILE("P3\n{} {}\n255", width, height);
-
-		for (int j = 0; j < height; ++j)
-		{
-			for (int i = 0; i < width; ++i)
-			{
-				glm::vec3 pixelColor{};
-				for (int s = 0; s < samplesPerPixel; ++s)
-				{
-					auto u = T(i + RandomFloat()) / (width - 1);
-					auto v = T(j + RandomFloat()) / (height - 1);
-					pixelColor += RayColor(camera.GetRay(u, 1 - v), world, maxDepth);
-				}
-				image.setPixel(i, j, { static_cast<sf::Uint8>(255.f * pixelColor.x), static_cast<sf::Uint8>(255.f * pixelColor.y), static_cast<sf::Uint8>(255.f * pixelColor.z) });
-
-
-				//imageData += WriteColor(pixelColor, samplesPerPixel);
-				//WriteColor1(pixelColor, samplesPerPixel);
-			}
-		}
-		return image;
-	}
-
+	void Render(const uint32_t width, const uint32_t height);
 };
 
