@@ -1,21 +1,14 @@
 #include "Renderer.h"
 
 #include <iostream>
-#include <queue>
 #include <fmt/chrono.h>
 
-struct PixelColor
-{
-	uint32_t X, Y;
-	glm::vec3 Color;
-};
 
-
-void Renderer::Render(const uint32_t width, const uint32_t height)
+sf::Image Renderer::Render(const uint32_t width, const uint32_t height)
 {
 	// Image
 	float aspectRatio = (float)width / (float)height;
-	constexpr int samplesPerPixel = 50;
+	constexpr int samplesPerPixel = 30;
 	constexpr float colorMul = 1.0f / (float)samplesPerPixel;
 	constexpr int maxDepth = 50;
 
@@ -44,7 +37,10 @@ void Renderer::Render(const uint32_t width, const uint32_t height)
 				while (window.pollEvent(event))
 				{
 					if (event.type == sf::Event::Closed)
+					{
 						window.close();
+						break;
+					}
 				}
 
 				texture.loadFromImage(image);
@@ -55,37 +51,34 @@ void Renderer::Render(const uint32_t width, const uint32_t height)
 		});
 	OpenGLThread.launch();
 
-	std::vector<std::thread> threadPool(std::thread::hardware_concurrency());
+	std::vector<std::jthread> threadPool(std::thread::hardware_concurrency());
 
 	const auto start = std::chrono::high_resolution_clock::now();
 
-	for (uint32_t j = 0; j < height; ++j)
+
+	for (uint32_t y = 0; y < height; ++y)
 	{
 		uint32_t thr = 0;
 		for (; thr < threadPool.size(); thr++)
 		{
-			threadPool[thr] = std::thread([width, height, &image, &camera, &world, this, j = j + thr]
+			threadPool[thr] = std::jthread([width, height, &image, &camera, &world, this, y = y + thr]
 				{
-					const float v = ((float)j + RandomFloat()) / static_cast<float>(height - 1u);
-
-					for (uint32_t i = 0; i < width; ++i)
+					const float v = ((float)y + RandomFloat()) / static_cast<float>(height - 1u);
+					for (uint32_t x = 0; x < width; ++x)
 					{
-						const float u = ((float)i + RandomFloat()) / static_cast<float>(width - 1u);
+						const float u = ((float)x + RandomFloat()) / static_cast<float>(width - 1u);
 
 						glm::vec3 pixelColor{};
 						for (int s = 0; s < samplesPerPixel; ++s)
-							pixelColor += RayColor(camera.GetRay(u, 1 - v), world, maxDepth);
+							pixelColor += RayColor(camera.GetRay(u, 1.0f - v), world, maxDepth);
 						pixelColor *= colorMul;
 
-						image.setPixel(i, j, { static_cast<sf::Uint8>(255.f * pixelColor.x), static_cast<sf::Uint8>(255.f * pixelColor.y), static_cast<sf::Uint8>(255.f * pixelColor.z) });
+						image.setPixel(x, y, { static_cast<sf::Uint8>(255.f * pixelColor.x), static_cast<sf::Uint8>(255.f * pixelColor.y), static_cast<sf::Uint8>(255.f * pixelColor.z) });
 					}
 				});
 		}
-		LOG_CORE_INFO("Progress: {}%", j / (float)height * 100);
-		j += thr - 1;
-
-		for (auto& thread : threadPool)
-			thread.join();
+		LOG_CORE_INFO("\rProgress: {}%\r", y / (float)height * 100);
+		y += thr - 1;
 	}
 
 	const auto end = std::chrono::high_resolution_clock::now();
@@ -93,4 +86,5 @@ void Renderer::Render(const uint32_t width, const uint32_t height)
 	LOG_CORE_INFO("Time taken: {:%S}", (end - start));
 
 	OpenGLThread.wait();
+	return image;
 }

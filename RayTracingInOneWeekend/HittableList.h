@@ -1,5 +1,7 @@
 #pragma once
 #include <utility>
+#include <EASTL/shared_ptr.h>
+#include <EASTL/vector.h>
 
 #include "Hittable.h"
 
@@ -7,17 +9,20 @@ class HittableList : public Hittable
 {
 public:
     HittableList() = default;
-    explicit HittableList(std::shared_ptr<Hittable> object) { Add(object); }
+    HittableList(Hittable* object)
+    {
+	    Add(object);
+    }
 
-    constexpr void Clear() { m_Objects.clear(); }
-    void Add(const std::shared_ptr<Hittable>& object) { m_Objects.emplace_back(object); }
+    void Clear() { m_Objects.clear(); }
+    void Add(Hittable* object) { m_Objects.emplace_back(object); }
 
-    constexpr virtual bool Hit(const Ray& ray, const T tMin, const T tMax, HitRecord& record) const override;
+    virtual bool Hit(const Ray& ray, const T tMin, const T tMax, HitRecord& record) const override;
 
     bool BoundingBox(double time0, double time1, AABB& outputBox) const override;
 
 
-    std::vector<std::shared_ptr<Hittable>> m_Objects;
+    eastl::vector<Hittable*> m_Objects;
 
 };
 
@@ -50,7 +55,7 @@ inline bool HittableList::BoundingBox(double time0, double time1, AABB& outputBo
     return true;
 }
 
-inline constexpr bool HittableList::Hit(const Ray& ray, const T tMin, const T tMax, HitRecord& record) const
+inline bool HittableList::Hit(const Ray& ray, const T tMin, const T tMax, HitRecord& record) const
 {
     HitRecord tempRecord;
     bool hitAnything = false;

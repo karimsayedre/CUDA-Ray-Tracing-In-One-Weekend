@@ -39,7 +39,7 @@ private:
 		// Use Schlick's approximation for reflectance.
 		auto r0 = (1.0f - ior) / (1.0f + ior);
 		r0 = r0 * r0;
-		return r0 + (1.0f - r0) * std::pow((1.0f - cosine), 5.0f);
+		return 0.0f;
 	}
 };
 

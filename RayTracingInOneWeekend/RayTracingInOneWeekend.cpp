@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "Log.h"
 
 #include "Viewer.h"
@@ -13,14 +15,16 @@ int main()
 
 	Renderer renderer;
 
-	renderer.Render(WIDTH, HEIGHT);
+	const sf::Image image = renderer.Render(WIDTH, HEIGHT);
 	
+	LOG_CORE_INFO("Saving to file: {}", (image.saveToFile("image.png") ? "successful" : "failed"));
 
-	//LOG_FILE(image);
 	Log::ShutDownFile();
 	LOG_CORE_INFO("Finished Successfully!");
 	Viewer::OpenImage();
 
 	Viewer::CloseImage();
 	Log::ShutDownLogger();
+
+	//std::cin.get();
 }

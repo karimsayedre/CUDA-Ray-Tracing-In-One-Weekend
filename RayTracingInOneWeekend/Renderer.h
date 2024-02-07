@@ -1,5 +1,4 @@
 #pragma once
-#define GLM_FORCE_SSE2
 
 #include <SFML/Graphics/Image.hpp>
 #include <thread>
@@ -25,8 +24,8 @@
 inline HittableList RandomScene() {
 	HittableList world;
 
-	auto ground_material = std::make_shared<Metal>(glm::vec3(1.0f, 0.0f, 0.0f), 0.3f);
-	world.Add(std::make_shared<Sphere>(glm::vec3(0, -1000, 0), 1000, ground_material));
+	auto ground_material = eastl::make_shared<Lambert>(glm::vec3(0.5, 0.5, 0.5));
+	world.Add(new Sphere(glm::vec3(0, -1000, 0), 1000, ground_material));
 
 	for (int a = -11; a < 11; a++) {
 		for (int b = -11; b < 11; b++) {
@@ -34,40 +33,40 @@ inline HittableList RandomScene() {
 			glm::vec3 center(a + 0.9f * RandomFloat(), 0.2f, b + 0.9f * RandomFloat());
 
 			if ((glm::length(center - glm::vec3(4, 0.2f, 0))) > 0.9f) {
-				std::shared_ptr<Material> sphere_material;
+				eastl::shared_ptr<Material> sphere_material;
 
 				if (choose_mat < 0.8f) {
 					// diffuse
 					auto albedo = RandomVec3() * RandomVec3();
-					sphere_material = std::make_shared<Lambert>(albedo);
-					world.Add(std::make_shared<Sphere>(center, 0.2f, sphere_material));
+					sphere_material = eastl::make_shared<Lambert>(albedo);
+					world.Add(new Sphere(center, 0.2f, sphere_material));
 				}
 				else if (choose_mat < 0.95f) {
 					// metal
 					auto albedo = RandomVec3(0.5f, 1.0f);
 					auto fuzz = RandomFloat(0.0f, 0.5f); // 0, 0.5
-					sphere_material = std::make_shared<Metal>(albedo, fuzz);
-					world.Add(std::make_shared<Sphere>(center, 0.2f, sphere_material));
+					sphere_material = eastl::make_shared<Metal>(albedo, fuzz);
+					world.Add(new Sphere(center, 0.2f, sphere_material));
 				}
 				else {
 					// glass
-					sphere_material = std::make_shared<Dielectric>(1.5);
-					world.Add(std::make_shared<Sphere>(center, 0.2f, sphere_material));
+					sphere_material = eastl::make_shared<Dielectric>(1.5);
+					world.Add(new Sphere(center, 0.2f, sphere_material));
 				}
 			}
 		}
 	}
 
-	auto material1 = std::make_shared<Dielectric>(1.5f);
-	world.Add(std::make_shared<Sphere>(glm::vec3(0, 1, 0), 1.0f, material1));
+	auto material1 = eastl::make_shared<Dielectric>(1.5f);
+	world.Add(new Sphere(glm::vec3(0, 1, 0), 1.0f, material1));
 
-	auto material2 = std::make_shared<Lambert>(glm::vec3(0.4f, 0.2f, 0.1f));
-	world.Add(std::make_shared<Sphere>(glm::vec3(-4, 1, 0), 1.0, material2));
+	auto material2 = eastl::make_shared<Lambert>(glm::vec3(0.4f, 0.2f, 0.1f));
+	world.Add(new Sphere(glm::vec3(-4, 1, 0), 1.0, material2));
 
-	auto material3 = std::make_shared<Metal>(glm::vec3(0.7f, 0.6f, 0.5f), 0.0f);
-	world.Add(std::make_shared<Sphere>(glm::vec3(4, 1, 0), 1.0, material3));
+	auto material3 = eastl::make_shared<Metal>(glm::vec3(0.7f, 0.6f, 0.5f), 0.0f);
+	world.Add(new Sphere(glm::vec3(4, 1, 0), 1.0, material3));
 
-	return { std::make_shared<BVHNode>(world, 0.0, 1.0) };
+	return { new BVHNode(world, 0.0, 1.0) };
 }
 
 
@@ -76,24 +75,37 @@ class Renderer
 public:
 
 
-	[[nodiscard]] inline const glm::vec3 RayColor(const Ray& ray, const Hittable& world, const int depth)
+	[[nodiscard]] inline static glm::vec3 RayColor(const Ray& ray, const Hittable& world, const int depth)
 	{
-		HitRecord hitRecord;
-		if (depth <= 0) return glm::vec3{};
+		glm::vec3 color = glm::vec3{1.0};
 
-		if (world.Hit(ray, 0.001f, Infinity, hitRecord))
-		{
+		glm::vec3 attenuation = glm::vec3{ 1.0f };
+		Ray newRay = ray;
+		for (int i = 0; i < depth; i++) {
+			HitRecord hitRecord;
+			if (!world.Hit(newRay, 0.001f, Infinity, hitRecord)) {
+				const glm::vec3 unitDirection = glm::normalize(newRay.Direction());
+				auto t = 0.5f * (unitDirection.y + 1.0f);
+				color *= 1.0f - t * glm::vec3(1.0f) + t * glm::vec3(0.5f, 0.7f, 1.0f);
+				break;
+			}
+
 			Ray scattered;
-			glm::vec3 attenuation;
-			if (hitRecord.MaterialPtr->Scatter(ray, hitRecord, attenuation, scattered))
-				return attenuation * RayColor(scattered, world, depth - 1);
-			return {};
+			if (hitRecord.MaterialPtr->Scatter(newRay, hitRecord, attenuation, scattered)) {
+				color *= attenuation;
+				newRay = scattered;
+			}
+			else
+			{
+				break;
+			}
+			
 		}
-		const glm::vec3 unitDirection = glm::normalize(ray.Direction());
-		auto t = 0.5f * (unitDirection.y + 1.0f);
-		return (1.0f - t) * glm::vec3(1.0f) + t * glm::vec3(0.5f, 0.7f, 1.0f);
+
+		return color * attenuation;
 	}
 
-	void Render(const uint32_t width, const uint32_t height);
+
+	sf::Image Render(const uint32_t width, const uint32_t height);
 };
 

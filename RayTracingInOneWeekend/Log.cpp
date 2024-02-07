@@ -15,8 +15,6 @@
 
 	s_CoreLogger = std::make_shared<spdlog::logger>("APP", appSinks);
 	s_CoreLogger->set_level(spdlog::level::trace);
-
-
 }
 
 
