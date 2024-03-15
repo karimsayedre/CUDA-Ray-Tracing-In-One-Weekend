@@ -4,6 +4,7 @@
 
 #include <glm/geometric.hpp>
 #include <glm/gtx/norm.hpp>
+#include "Random.h"
 
 
 using T = float;
@@ -35,30 +36,3 @@ namespace math {
 	}
 }
 
-inline float RandomFloat(const float min = 0.0f, const float max = 1.0f)
-{
-	return min + (float)(rand()) / (float)(RAND_MAX / (max - min));
-}
-
-inline int RandomInt(const int min, const int max)
-{
-	return static_cast<int>(RandomFloat((float)min, (float)max + 1.0f));
-}
-
-
-inline glm::vec3 RandomVec3(const float min = 0.0f, const float max = 1.0f)
-{
-	return { RandomFloat(min, max), RandomFloat(min, max), RandomFloat(min, max) };
-}
-
-template <typename OStream, typename T>
-inline constexpr OStream& operator<<(OStream& out, const glm::vec3& v) noexcept
-{
-	return out << '(' << v.x << ' ' << v.y << ' ' << v.z << ')';
-}
-
-
-inline glm::vec3 RandomNormalizedVector()
-{
-	return glm::normalize(RandomVec3());
-}

@@ -3,11 +3,10 @@
 #include <iostream>
 #include <fmt/chrono.h>
 
-
 sf::Image Renderer::Render(const uint32_t width, const uint32_t height)
 {
 	// Image
-	float aspectRatio = (float)width / (float)height;
+	const float aspectRatio = (float)width / (float)height;
 	constexpr int samplesPerPixel = 30;
 	constexpr float colorMul = 1.0f / (float)samplesPerPixel;
 	constexpr int maxDepth = 50;
@@ -53,38 +52,57 @@ sf::Image Renderer::Render(const uint32_t width, const uint32_t height)
 
 	std::vector<std::jthread> threadPool(std::thread::hardware_concurrency());
 
-	const auto start = std::chrono::high_resolution_clock::now();
 
-
-	for (uint32_t y = 0; y < height; ++y)
+	while (true)
 	{
-		uint32_t thr = 0;
-		for (; thr < threadPool.size(); thr++)
+		static std::atomic<uint32_t> frame = 0;
+		const auto start = std::chrono::high_resolution_clock::now();
+
+		for (uint32_t y = 0; y < height; )
 		{
-			threadPool[thr] = std::jthread([width, height, &image, &camera, &world, this, y = y + thr]
-				{
-					const float v = ((float)y + RandomFloat()) / static_cast<float>(height - 1u);
-					for (uint32_t x = 0; x < width; ++x)
+			uint32_t thr = 0;
+			for (; thr < threadPool.size(); thr++)
+			{
+				threadPool[thr] = std::jthread([width, height, &image, &camera, &world, this, y = y + thr, frame = frame.load()]
 					{
-						const float u = ((float)x + RandomFloat()) / static_cast<float>(width - 1u);
+						for (uint32_t x = 0; x < width; ++x)
+						{
+							uint32_t seed = y * width + x * frame * samplesPerPixel;
+							const float v = ((float)y + RandomFloat(seed)) / static_cast<float>(height - 1u);
+							const float u = ((float)x + RandomFloat(seed)) / static_cast<float>(width - 1u);
 
-						glm::vec3 pixelColor{};
-						for (int s = 0; s < samplesPerPixel; ++s)
-							pixelColor += RayColor(camera.GetRay(u, 1.0f - v), world, maxDepth);
-						pixelColor *= colorMul;
+							glm::vec3 pixelColor{};
+							for (int s = 0; s < samplesPerPixel; ++s)
+								pixelColor += RayColor(camera.GetRay(u, 1.0f - v), world, maxDepth);
+							pixelColor *= colorMul;
 
-						image.setPixel(x, y, { static_cast<sf::Uint8>(255.f * pixelColor.x), static_cast<sf::Uint8>(255.f * pixelColor.y), static_cast<sf::Uint8>(255.f * pixelColor.z) });
-					}
-				});
+
+							if (frame < 1)
+							{
+								image.setPixel(x, y, sf::Color{ static_cast<sf::Uint8>(255.f * pixelColor.x), static_cast<sf::Uint8>(255.f * pixelColor.y), static_cast<sf::Uint8>(255.f * pixelColor.z) });
+								break;
+							}
+
+							sf::Color oldColor = image.getPixel(x, y);
+
+
+							glm::vec3 color = (glm::vec3(oldColor.r / 255.0f, oldColor.g / 255.0f, oldColor.b / 255.0f) + pixelColor) * (0.5f);
+
+
+							image.setPixel(x, y, sf::Color{ sf::Uint8(color.r * 255), sf::Uint8(color.g * 255), sf::Uint8(color.b * 255) });
+						}
+					});
+			}
+			LOG_CORE_INFO("\rProgress: {}%\r", y / (float)height * 100);
+			y += thr;
 		}
-		LOG_CORE_INFO("\rProgress: {}%\r", y / (float)height * 100);
-		y += thr - 1;
+
+		const auto end = std::chrono::high_resolution_clock::now();
+
+		LOG_CORE_INFO("Time taken: {:%S}", (end - start));
+		++frame;
 	}
-
-	const auto end = std::chrono::high_resolution_clock::now();
-
-	LOG_CORE_INFO("Time taken: {:%S}", (end - start));
-
 	OpenGLThread.wait();
+
 	return image;
 }

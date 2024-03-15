@@ -21,7 +21,9 @@ public:
 
 		glm::vec3 reflectedDir;
 		const bool cannotReflect = refractionRatio * sinTheta > 1.0f;
-		if (cannotReflect || reflectance(cosTheta, refractionRatio) > RandomFloat())
+
+		auto seed = (uint32_t)rand();
+		if (cannotReflect || Reflectance(cosTheta, refractionRatio) > RandomFloat(seed))
 			reflectedDir = glm::reflect(direction, rec.Normal);
 		else
 			reflectedDir = glm::refract(direction, rec.Normal, refractionRatio);
@@ -34,12 +36,12 @@ public:
 	T m_IOR;
 
 private:
-	static T reflectance(const T cosine, const T ior)
+	static T Reflectance(const T cosine, const T ior)
 	{
 		// Use Schlick's approximation for reflectance.
 		auto r0 = (1.0f - ior) / (1.0f + ior);
 		r0 = r0 * r0;
-		return 0.0f;
+		return r0 + (1 - r0) * glm::pow((1.0f - cosine), 5.0f);
 	}
 };
 

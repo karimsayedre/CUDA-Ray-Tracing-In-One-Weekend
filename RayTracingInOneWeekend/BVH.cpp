@@ -40,6 +40,7 @@ bool box_z_compare(const Hittable* a, const Hittable* b) {
 
 BVHNode::BVHNode(const eastl::vector<Hittable*>& src_objects, size_t start, size_t end, double time0,
 	double time1)
+		: Hittable(this)
 {
 
 	eastl::vector<Hittable*> objects; // Create a modifiable array of the source scene objects
@@ -48,13 +49,16 @@ BVHNode::BVHNode(const eastl::vector<Hittable*>& src_objects, size_t start, size
 		objects.push_back(src);
 	}
 
-	int axis = RandomInt(0, 2);
+	auto seed = (uint32_t)rand();
+	int axis = RandomInt(seed, 0, 2);
 	auto comparator = (axis == 0) ? box_x_compare : (axis == 1) ? box_y_compare : box_z_compare;
 
 	size_t object_span = end - start;
 
+	static size_t one = 0, two = 0, more = 0;
 	if (object_span == 1) {
 		m_Left = m_Right = objects[start];
+		one++;
 	}
 	else if (object_span == 2) {
 		if (comparator(objects[start], objects[start + 1])) {
@@ -65,6 +69,7 @@ BVHNode::BVHNode(const eastl::vector<Hittable*>& src_objects, size_t start, size
 			m_Left = objects[start + 1];
 			m_Right = objects[start];
 		}
+		two++;
 	}
 	else {
 		std::sort(objects.begin() + start, objects.begin() + end, comparator);
@@ -72,7 +77,10 @@ BVHNode::BVHNode(const eastl::vector<Hittable*>& src_objects, size_t start, size
 		auto mid = start + object_span / 2;
 		m_Left =  new BVHNode(objects, start, mid, time0, time1);
 		m_Right = new BVHNode(objects, mid, end, time0, time1);
+		more++;
 	}
+
+	LOG_CORE_INFO("One :{}, Two: {}, More: {}, Axis: {}", one, two, more, axis);
 
 	AABB box_left, box_right;
 
@@ -82,13 +90,4 @@ BVHNode::BVHNode(const eastl::vector<Hittable*>& src_objects, size_t start, size
 	m_Box = SurroundingBox(box_left, box_right);
 }
 
-bool BVHNode::Hit(const Ray& r, const T tMin, const T tMax, HitRecord& rec) const
-{
-	if (!m_Box.Hit(r, tMin, tMax))
-		return false;
 
-	const bool hitLeft = m_Left->Hit(r, tMin, tMax, rec);
-	const bool hitRight = m_Right->Hit(r, tMin, hitLeft ? rec.T : tMax, rec);
-
-	return hitLeft || hitRight;
-}

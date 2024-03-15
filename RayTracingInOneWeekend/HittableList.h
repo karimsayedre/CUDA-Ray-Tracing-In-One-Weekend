@@ -1,15 +1,22 @@
 #pragma once
 #include <utility>
+#include <variant>
 #include <EASTL/shared_ptr.h>
 #include <EASTL/vector.h>
 
 #include "Hittable.h"
+#include "AABB.h"
 
 class HittableList : public Hittable
 {
 public:
-    HittableList() = default;
+    //constexpr HittableType s_HittableType = HittableType::HittableList;
+
+    HittableList()
+	    : Hittable(this)
+	{}
     HittableList(Hittable* object)
+        : Hittable(this)
     {
 	    Add(object);
     }
@@ -17,9 +24,10 @@ public:
     void Clear() { m_Objects.clear(); }
     void Add(Hittable* object) { m_Objects.emplace_back(object); }
 
-    virtual bool Hit(const Ray& ray, const T tMin, const T tMax, HitRecord& record) const override;
+    bool Hit(const Ray& ray, const T tMin, const T tMax, HitRecord& record) const;
 
-    bool BoundingBox(double time0, double time1, AABB& outputBox) const override;
+    bool BoundingBox(double time0, double time1, AABB& outputBox) const;
+
 
 
     eastl::vector<Hittable*> m_Objects;

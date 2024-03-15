@@ -11,7 +11,8 @@ public:
 
 	bool Scatter(const Ray& ray, const HitRecord& rec, glm::vec3& attenuation, Ray& scattered) const override
 	{
-		glm::vec3 scatterDirection = rec.Normal + RandomNormalizedVector();
+		auto seed = (uint32_t)rand();
+		glm::vec3 scatterDirection = rec.Normal + RandomNormalizedVector(seed);
 
 		if (math::NearZero(scatterDirection))
 			scatterDirection = rec.Normal;

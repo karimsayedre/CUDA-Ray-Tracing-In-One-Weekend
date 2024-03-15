@@ -27,30 +27,32 @@ inline HittableList RandomScene() {
 	auto ground_material = eastl::make_shared<Lambert>(glm::vec3(0.5, 0.5, 0.5));
 	world.Add(new Sphere(glm::vec3(0, -1000, 0), 1000, ground_material));
 
+	auto seed = (uint32_t)rand();
+
 	for (int a = -11; a < 11; a++) {
 		for (int b = -11; b < 11; b++) {
-			auto choose_mat = RandomFloat();
-			glm::vec3 center(a + 0.9f * RandomFloat(), 0.2f, b + 0.9f * RandomFloat());
+			auto choose_mat = RandomFloat(seed);
+			glm::vec3 center(a + 0.9f * RandomFloat(seed), 0.2f, b + 0.9f * RandomFloat(seed));
 
 			if ((glm::length(center - glm::vec3(4, 0.2f, 0))) > 0.9f) {
 				eastl::shared_ptr<Material> sphere_material;
 
 				if (choose_mat < 0.8f) {
 					// diffuse
-					auto albedo = RandomVec3() * RandomVec3();
+					auto albedo = RandomVec3(seed) * RandomVec3(seed);
 					sphere_material = eastl::make_shared<Lambert>(albedo);
 					world.Add(new Sphere(center, 0.2f, sphere_material));
 				}
 				else if (choose_mat < 0.95f) {
 					// metal
-					auto albedo = RandomVec3(0.5f, 1.0f);
-					auto fuzz = RandomFloat(0.0f, 0.5f); // 0, 0.5
+					auto albedo = RandomVec3(seed, 0.5f, 1.0f);
+					auto fuzz = RandomFloat(seed, 0.0f, 0.5f); // 0, 0.5
 					sphere_material = eastl::make_shared<Metal>(albedo, fuzz);
 					world.Add(new Sphere(center, 0.2f, sphere_material));
 				}
 				else {
 					// glass
-					sphere_material = eastl::make_shared<Dielectric>(1.5);
+					sphere_material = eastl::make_shared<Dielectric>(1.5f);
 					world.Add(new Sphere(center, 0.2f, sphere_material));
 				}
 			}
@@ -75,25 +77,25 @@ class Renderer
 public:
 
 
-	[[nodiscard]] inline static glm::vec3 RayColor(const Ray& ray, const Hittable& world, const int depth)
+	[[nodiscard]] inline static glm::vec3 RayColor(Ray ray, const Hittable& world, const int depth)
 	{
 		glm::vec3 color = glm::vec3{1.0};
 
 		glm::vec3 attenuation = glm::vec3{ 1.0f };
-		Ray newRay = ray;
 		for (int i = 0; i < depth; i++) {
 			HitRecord hitRecord;
-			if (!world.Hit(newRay, 0.001f, Infinity, hitRecord)) {
-				const glm::vec3 unitDirection = glm::normalize(newRay.Direction());
+			if (!world.Hit(ray, 0.1f, Infinity, hitRecord)) {
+				const glm::vec3 unitDirection = glm::normalize(ray.Direction());
 				auto t = 0.5f * (unitDirection.y + 1.0f);
 				color *= 1.0f - t * glm::vec3(1.0f) + t * glm::vec3(0.5f, 0.7f, 1.0f);
 				break;
 			}
 
 			Ray scattered;
-			if (hitRecord.MaterialPtr->Scatter(newRay, hitRecord, attenuation, scattered)) {
+			if (hitRecord.MaterialPtr->Scatter(ray, hitRecord, attenuation, scattered))
+			{
 				color *= attenuation;
-				newRay = scattered;
+				ray = scattered;
 			}
 			else
 			{

@@ -1,8 +1,15 @@
 #pragma once
-#include "AABB.h"
+#include <any>
+#include <glm/vec3.hpp>
+
+#include "Vec3.h"
 #include "Ray.h"
 
 
+class BVHNode;
+class HittableList;
+class Sphere;
+class AABB;
 class Material;
 
 struct HitRecord
@@ -28,12 +35,36 @@ enum class HittableType
 };
 
 
+
+
 class Hittable
 {
+	HittableType Type;
+	void* Derived;
+
+	
 public:
-	Hittable() = default;
-	virtual bool Hit(const Ray& ray, const T tMin, const T tMax, HitRecord& record) const = 0;
-	virtual bool BoundingBox(double time0, double time1, AABB& outputBox) const = 0;
+
+	Hittable(Sphere* hittable)
+		: Type(HittableType::Sphere), Derived(hittable)
+	{
+	}
+
+	Hittable(HittableList* hittable)
+		: Type(HittableType::HittableList), Derived(hittable)
+	{
+	}
+
+	Hittable(BVHNode* hittable)
+		: Type(HittableType::BvhNode), Derived(hittable)
+	{
+	}
+
+
+	Hittable() = delete;
+	bool Hit(const Ray& ray, const T tMin, const T tMax, HitRecord& record) const;
+
+	bool BoundingBox(double time0, double time1, AABB& outputBox) const;
 };
 
 
