@@ -10,7 +10,7 @@ class BVHNode : public Hittable
 
 	__device__ BVHNode(Hittable** src_objects, size_t start, size_t end, double time0, double time1, curandState* local_rand_state);
 
-	__device__ bool Hit(const Ray& r, const Float tMin, Float tMax, HitRecord& rec) const
+	__device__ bool Hit(const Ray& r, const Float tMin, Float tMax, HitRecord& rec) const override
 	{
 		Hittable* stack[50]; // Adjust stack depth as needed
 		int		  stack_ptr		 = 0;
@@ -26,9 +26,8 @@ class BVHNode : public Hittable
 			Hittable* node = stack[--stack_ptr];
 
 			// Early out: Skip nodes whose AABB doesn't intersect [tMin, closest_so_far]
-			AABB box;
-			node->GetBoundingBox(0, 0, box);
-			if (!box.Hit(r, tMin, closest_so_far))
+			AABB box = node->GetBoundingBox(0, 0);
+			if (!box.Hit(r, {tMin, closest_so_far}))
 				continue;
 
 			if (node->IsLeaf())
@@ -52,10 +51,9 @@ class BVHNode : public Hittable
 		return hit_anything;
 	}
 
-	__device__ bool GetBoundingBox(double time0, double time1, AABB& outputBox) const
+	__device__ AABB GetBoundingBox(double time0, double time1) const override
 	{
-		outputBox = m_Box;
-		return true;
+		return m_Box;
 	}
 
   private:

@@ -66,7 +66,7 @@ class vec3
 	{
 		return vec3(-e.x, -e.y, -e.z);
 	}
-	__host__ __device__ inline float operator[](int i) const
+	__host__ __device__ inline float operator[](int i) const noexcept
 	{
 		switch (i)
 		{
@@ -77,7 +77,7 @@ class vec3
 		//assert(false);
 		return 0;
 	}
-	__host__ __device__ inline float& operator[](int i)
+	__host__ __device__ inline float& operator[](int i) noexcept
 	{
 		switch (i)
 		{

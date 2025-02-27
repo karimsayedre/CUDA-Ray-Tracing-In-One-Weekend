@@ -53,10 +53,9 @@ class Sphere : public Hittable
 		return false;
 	}
 
-	__device__ bool GetBoundingBox(double time0, double time1, AABB& outputBox) const
+	__device__ AABB GetBoundingBox(double time0, double time1) const override
 	{
-		outputBox = m_BoundingBox;
-		return true;
+		return m_BoundingBox;
 	}
 
 	vec3				  m_Center;

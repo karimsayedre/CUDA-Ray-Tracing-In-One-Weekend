@@ -24,24 +24,24 @@ __device__ Hittable::Hittable(BVHNode* hittable)
 {
 }
 
-__device__ bool Hittable::Hit(const Ray& ray, float tMin, float tMax, HitRecord& record) const
-{
-	switch (Type)
-	{
-		case HittableType::eBvhNode: return u_BvhNode->Hit(ray, tMin, tMax, record);
-		case HittableType::eHittableList: return u_HittableList->Hit(ray, tMin, tMax, record);
-		case HittableType::eSphere: return u_Sphere->Hit(ray, tMin, tMax, record);
-	}
-	return false; // No assert in device code; can cause synchronization issues
-}
-
-__device__ bool Hittable::GetBoundingBox(double time0, double time1, AABB& outputBox) const
-{
-	switch (Type)
-	{
-		case HittableType::eBvhNode: return u_BvhNode->GetBoundingBox(time0, time1, outputBox);
-		case HittableType::eHittableList: return u_HittableList->GetBoundingBox(time0, time1, outputBox);
-		case HittableType::eSphere: return u_Sphere->GetBoundingBox(time0, time1, outputBox);
-	}
-	return false;
-}
+//__device__ bool Hittable::Hit(const Ray& ray, float tMin, float tMax, HitRecord& record) const
+//{
+//	switch (Type)
+//	{
+//		case HittableType::eBvhNode: return u_BvhNode->Hit(ray, tMin, tMax, record);
+//		case HittableType::eHittableList: return u_HittableList->Hit(ray, tMin, tMax, record);
+//		case HittableType::eSphere: return u_Sphere->Hit(ray, tMin, tMax, record);
+//	}
+//	return false; // No assert in device code; can cause synchronization issues
+//}
+//
+//__device__ bool Hittable::GetBoundingBox(double time0, double time1, AABB& outputBox) const
+//{
+//	switch (Type)
+//	{
+//		case HittableType::eBvhNode: return u_BvhNode->GetBoundingBox(time0, time1, outputBox);
+//		case HittableType::eHittableList: return u_HittableList->GetBoundingBox(time0, time1, outputBox);
+//		case HittableType::eSphere: return u_Sphere->GetBoundingBox(time0, time1, outputBox);
+//	}
+//	return false;
+//}

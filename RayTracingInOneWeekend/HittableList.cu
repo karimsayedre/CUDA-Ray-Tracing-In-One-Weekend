@@ -5,26 +5,16 @@ __device__ HittableList::HittableList(Hittable** objects, uint32_t count)
 	: Hittable(this), m_Objects(objects), m_Count(count)
 {
 	// Add(object);
+	for (uint32_t i = 0; i < count; i++)
+	{
+		AABB objectBox = objects[i]->GetBoundingBox(0, 1);
+		m_BoundingBox  = AABB(m_BoundingBox, objectBox);
+	}
 }
 
-__device__ bool HittableList::GetBoundingBox(double time0, double time1, AABB& outputBox) const
+__device__ AABB HittableList::GetBoundingBox(double time0, double time1) const
 {
-	// if (m_Objects.empty()) return false;
-
-	AABB tempBox;
-	bool firstBox = true;
-
-	for (uint32_t i = 0; i < m_Count; i++)
-	{
-		if (!m_Objects[i]->GetBoundingBox(time0, time1, tempBox))
-			return false;
-		outputBox = firstBox ? tempBox : SurroundingBox(outputBox, tempBox);
-		firstBox  = false;
-	}
-
-	m_BoundingBox = outputBox;
-
-	return true;
+	return m_BoundingBox;
 }
 
 __device__ bool HittableList::Hit(const Ray& ray, const Float tMin, const Float tMax, HitRecord& record) const

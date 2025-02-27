@@ -20,13 +20,7 @@
 
 __device__ inline bool box_compare(const Hittable* a, const Hittable* b, int axis)
 {
-	AABB box_a;
-	AABB box_b;
-
-	if (!a->GetBoundingBox(0, 0, box_a) || !b->GetBoundingBox(0, 0, box_b))
-		printf("No bounding box in bvh_node constructor.");
-
-	return box_a.Min()[axis] < box_b.Min()[axis];
+	return a->GetBoundingBox(0.0, 1.0).axis(axis).min < b->GetBoundingBox(0.0, 1.0).axis(axis).min;
 }
 
 __device__ bool box_x_compare(const Hittable* a, const Hittable* b)
@@ -63,8 +57,12 @@ __device__ BVHNode::BVHNode(Hittable** src_objects, size_t start, size_t end, do
 		objects[i] = src_objects[start + i];
 	}
 
-	// Pick a random axis
-	int	 axis		= RandomInt(local_rand_state, 0, 2);
+		// Build the bounding box of the span of source objects.
+	m_Box = {};
+	for (size_t object_index = 0; object_index < object_span; object_index++)
+		m_Box = AABB(m_Box, objects[object_index]->GetBoundingBox(0.0, 1.0));
+
+	int	 axis		= m_Box.LongestAxis();
 	auto comparator = (axis == 0)	? box_x_compare
 					  : (axis == 1) ? box_y_compare
 									: box_z_compare;
@@ -106,19 +104,15 @@ __device__ BVHNode::BVHNode(Hittable** src_objects, size_t start, size_t end, do
 				break; // Early exit after partitioning around mid
 		}
 
-		m_Left	   = new BVHNode(objects, 0, mid, time0, time1, local_rand_state);
-		m_Right	   = new BVHNode(objects, mid, object_span, time0, time1, local_rand_state);
+		m_Left	= new BVHNode(objects, 0, mid, time0, time1, local_rand_state);
+		m_Right = new BVHNode(objects, mid, object_span, time0, time1, local_rand_state);
 	}
 
 	// Compute Bounding Box
-	AABB box_left, box_right;
-	if (!m_Left->GetBoundingBox(time0, time1, box_left) || !m_Right->GetBoundingBox(time0, time1, box_right))
-	{
-		printf("No bounding box in BVHNode constructor. \n");
-		// LOG_CORE_ERROR("No bounding box in BVHNode constructor.");
-	}
+	AABB box_left = m_Left->GetBoundingBox(time0, time1);
+	AABB box_right = m_Right->GetBoundingBox(time0, time1);
 
-	m_Box = SurroundingBox(box_left, box_right);
+	m_Box = AABB(box_left, box_right);
 
 	// Free temporary array
 	delete[] objects;

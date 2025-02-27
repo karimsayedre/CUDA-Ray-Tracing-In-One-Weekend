@@ -54,8 +54,8 @@ class Hittable
 	Hittable() = delete;
 
 	// Methods
-	__device__ bool Hit(const Ray& ray, float tMin, float tMax, HitRecord& record) const;
-	__device__ bool GetBoundingBox(double time0, double time1, AABB& outputBox) const;
+	__device__ virtual bool Hit(const Ray& ray, float tMin, float tMax, HitRecord& record) const = 0;
+	__device__ virtual AABB GetBoundingBox(double time0, double time1) const = 0;
 	__device__ bool IsLeaf() const
 	{
 		return Type == HittableType::eSphere;

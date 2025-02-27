@@ -194,6 +194,7 @@
     <ClInclude Include="Dielectric.h" />
     <ClInclude Include="Hittable.h" />
     <ClInclude Include="HittableList.h" />
+    <ClInclude Include="Interval.h" />
     <ClInclude Include="Lambert.h" />
     <ClInclude Include="Log.h" />
     <ClCompile Include="RayTracingInOneWeekend.cpp" />
