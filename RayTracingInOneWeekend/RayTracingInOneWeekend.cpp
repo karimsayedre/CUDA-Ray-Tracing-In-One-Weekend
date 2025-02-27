@@ -1,3 +1,5 @@
+#include "pch.cuh"
+
 #include <iostream>
 
 #include "Log.h"

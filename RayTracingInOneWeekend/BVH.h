@@ -1,51 +1,65 @@
 #pragma once
-#include <vector>
-
-
-
-#include <EASTL/vector.h>
 
 #include "Hittable.h"
 #include "HittableList.h"
 
-
-
-class BVHNode : public Hittable 
+class BVHNode : public Hittable
 {
-public:
-    BVHNode(const HittableList& list, double time0, double time1)
-        : BVHNode(list.m_Objects, 0, list.m_Objects.size(), time0, time1)
-    {
-    }
+  public:
+	__device__ BVHNode(const HittableList& list, double time0, double time1, curandState* local_rand_state);
 
-    BVHNode(const eastl::vector<Hittable*>& src_objects, size_t start, size_t end, double time0, double time1);
+	__device__ BVHNode(Hittable** src_objects, size_t start, size_t end, double time0, double time1, curandState* local_rand_state);
 
-    bool Hit(const Ray& r, const T tMin, T tMax, HitRecord& rec) const
-    {
-        if (!m_Box.Hit(r, tMin, tMax))
-            return false;
+	__device__ bool Hit(const Ray& r, const Float tMin, Float tMax, HitRecord& rec) const
+	{
+		Hittable* stack[50]; // Adjust stack depth as needed
+		int		  stack_ptr		 = 0;
+		bool	  hit_anything	 = false;
+		Float	  closest_so_far = tMax;
 
+		// Push root children (right first, then left to process left first)
+		stack[stack_ptr++] = m_Right;
+		stack[stack_ptr++] = m_Left;
 
-        const bool hitLeft = m_Left->Hit(r, tMin, tMax, rec);
-        //const auto max = hitLeft ? rec.T : tMax;
-        if (hitLeft)
-            tMax = rec.T;
+		while (stack_ptr > 0)
+		{
+			Hittable* node = stack[--stack_ptr];
 
-        const bool hitRight = m_Right->Hit(r, tMin, tMax, rec);
+			// Early out: Skip nodes whose AABB doesn't intersect [tMin, closest_so_far]
+			AABB box;
+			node->GetBoundingBox(0, 0, box);
+			if (!box.Hit(r, tMin, closest_so_far))
+				continue;
 
-        return hitLeft || hitRight;
-    }
+			if (node->IsLeaf())
+			{ // Assume `IsLeaf()` checks for primitive (e.g., Sphere)
+				HitRecord temp_rec;
+				if (node->Hit(r, tMin, closest_so_far, temp_rec))
+				{
+					hit_anything   = true;
+					closest_so_far = temp_rec.T;
+					rec			   = temp_rec;
+				}
+			}
+			else
+			{ // Internal BVHNode
+				BVHNode* bvh_node = static_cast<BVHNode*>(node);
+				// Push children in reverse order (right first, left next)
+				stack[stack_ptr++] = bvh_node->m_Right;
+				stack[stack_ptr++] = bvh_node->m_Left;
+			}
+		}
+		return hit_anything;
+	}
 
-    bool BoundingBox(double time0, double time1, AABB& outputBox) const
-    {
-        outputBox = m_Box;
-        return true;
-    }
+	__device__ bool GetBoundingBox(double time0, double time1, AABB& outputBox) const
+	{
+		outputBox = m_Box;
+		return true;
+	}
 
-    Hittable* m_Left;
-    Hittable* m_Right;
-    AABB m_Box;
-
+  private:
+	Hittable* m_Left;
+	Hittable* m_Right;
+	AABB	  m_Box;
 };
-
-

@@ -1,62 +1,66 @@
 #pragma once
-#include <EASTL/shared_ptr.h>
+#include <memory>
 
-#include "Hittable.h"
 #include "AABB.h"
 
+#include <glm/glm.hpp>
+
+#include "Hittable.h"
 
 class Sphere : public Hittable
 {
-public:
-    //constexpr HittableType s_HittableType = HittableType::Sphere;
-
-	Sphere() noexcept : Hittable(this) {}
-	Sphere(const glm::vec3& center, const T radius, const eastl::shared_ptr<Material> material) noexcept
-	: Hittable(this), m_Center(center), m_Radius(radius), m_MaterialPtr(material)
+  public:
+	// Templated constructor for material type
+	__device__ Sphere(const vec3& center, Float radius, const Material* const material)
+		: Hittable(this),
+		  m_Center(center),
+		  m_Radius(radius),
+		  m_BoundingBox(
+			  m_Center - m_Radius,
+			  m_Center + m_Radius),
+		  m_MaterialPtr(material)
 	{
 	}
 
-	bool Hit(const Ray& ray, const T tMin, const T tMax, HitRecord& record) const
-    {
-        glm::vec3 oc = ray.Origin() - m_Center;
-        auto dir = ray.Direction();
-        auto a = glm::dot(dir, dir);
-        auto half_b = glm::dot(oc, dir);
-        auto c = glm::dot(oc, oc) - m_Radius * m_Radius;
+	__device__ bool Hit(const Ray& ray, const Float tMin, const Float tMax, HitRecord& record) const
+	{
+		vec3  oc		   = ray.Origin() - m_Center;
+		float a			   = dot(ray.Direction(), ray.Direction());
+		float b			   = dot(oc, ray.Direction());
+		float c			   = dot(oc, oc) - m_Radius * m_Radius;
+		float discriminant = b * b - a * c;
+		if (discriminant > 0)
+		{
+			float temp = (-b - sqrt(discriminant)) / a;
+			if (temp < tMax && temp > tMin)
+			{
+				record.T		   = temp;
+				record.Location	   = ray.point_at_parameter(record.T);
+				record.Normal	   = ((record.Location - m_Center) / m_Radius).make_unit_vector();
+				record.MaterialPtr = m_MaterialPtr;
+				return true;
+			}
+			temp = (-b + sqrt(discriminant)) / a;
+			if (temp < tMax && temp > tMin)
+			{
+				record.T		   = temp;
+				record.Location	   = ray.point_at_parameter(record.T);
+				record.Normal	   = ((record.Location - m_Center) / m_Radius).make_unit_vector();
+				record.MaterialPtr = m_MaterialPtr;
+				return true;
+			}
+		}
+		return false;
+	}
 
-        auto discriminant = half_b * half_b - a * c;
-        if (discriminant < 0) return false;
-        auto sqrtd = sqrt(discriminant);
+	__device__ bool GetBoundingBox(double time0, double time1, AABB& outputBox) const
+	{
+		outputBox = m_BoundingBox;
+		return true;
+	}
 
-        // Find the nearest root that lies in the acceptable range.
-        auto root = (-half_b - sqrtd) / a;
-        if (root < tMin || tMax < root) {
-            root = (-half_b + sqrtd) / a;
-            if (root < tMin || tMax < root)
-                return false;
-        }
-
-        record.T = root;
-        record.Location = ray.At(record.T);
-        record.SetFaceNormal(ray, (record.Location - m_Center) / m_Radius);
-        record.MaterialPtr = m_MaterialPtr.get();
-        return true;
-
-    }
-	bool BoundingBox(double time0, double time1, AABB& outputBox) const
-    {
-        outputBox = AABB(
-            m_Center - glm::vec3(m_Radius, m_Radius, m_Radius),
-            m_Center + glm::vec3(m_Radius, m_Radius, m_Radius));
-        return true;
-    }
-
-	glm::vec3 m_Center;
-	T m_Radius;
-	eastl::shared_ptr<Material> m_MaterialPtr;
-
-
+	vec3				  m_Center;
+	Float				  m_Radius;
+	AABB				  m_BoundingBox;
+	const Material* const m_MaterialPtr;
 };
-
-
-
