@@ -7,16 +7,46 @@
 class HittableList : public Hittable
 {
   public:
-	//__device__ HittableList()
-	//	: Hittable(this)
-	//{
-	//}
-	__device__ HittableList(Hittable** objects, uint32_t count);
+	__device__ HittableList(Hittable** objects, uint32_t count)
+		: m_Objects(objects), m_Count(count)
+	{
+		// Add(object);
+		for (uint32_t i = 0; i < count; i++)
+		{
+			AABB objectBox = objects[i]->GetBoundingBox(0, 1);
+			m_BoundingBox  = AABB(m_BoundingBox, objectBox);
+		}
+	}
 
-	//__device__ void Clear() { m_Objects.clear(); }
-	//__device__ void Add(Hittable* object) { m_Objects.push_back(object); }
-	__device__ bool               Hit(const Ray& ray, const Float tMin, const Float tMax, HitRecord& record) const override;
-	__device__ [[nodiscard]] AABB GetBoundingBox(double time0, double time1) const override;
+	__device__ AABB GetBoundingBox(double time0, double time1) const override
+	{
+		return m_BoundingBox;
+	}
+
+	__device__ bool Hit(const Ray& ray, const Float tMin, const Float tMax, HitRecord& record) const override
+	{
+		HitRecord tempRecord;
+		bool	  hitAnything  = false;
+		Float	  closestSoFar = tMax;
+
+		for (uint32_t i = 0; i < m_Count; i++)
+		{
+			if (m_Objects[i]->Hit(ray, tMin, closestSoFar, tempRecord))
+			{
+				hitAnything	 = true;
+				closestSoFar = tempRecord.T;
+				record		 = tempRecord;
+			}
+		}
+		return hitAnything;
+	}
+
+	__device__ [[nodiscard]] bool IsLeaf() const override
+	{
+		return false;
+	}
+
+  //private:
 
 	Hittable** m_Objects;
 	uint32_t   m_Count;

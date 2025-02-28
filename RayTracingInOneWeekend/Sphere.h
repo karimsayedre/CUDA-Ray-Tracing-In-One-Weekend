@@ -6,19 +6,19 @@
 #include <glm/glm.hpp>
 
 #include "Hittable.h"
+#include "Material.h"
 
 class Sphere : public Hittable
 {
   public:
 	// Templated constructor for material type
-	__device__ Sphere(const vec3& center, Float radius, const Material* const material)
-		: Hittable(this),
-		  m_Center(center),
+	__device__ Sphere(const vec3& center, Float radius, const Material& material)
+		: m_Center(center),
 		  m_Radius(radius),
 		  m_BoundingBox(
 			  m_Center - m_Radius,
 			  m_Center + m_Radius),
-		  m_MaterialPtr(material)
+		  m_Material(material)
 	{
 	}
 
@@ -37,7 +37,7 @@ class Sphere : public Hittable
 				record.T		   = temp;
 				record.Location	   = ray.point_at_parameter(record.T);
 				record.Normal	   = ((record.Location - m_Center) / m_Radius).make_unit_vector();
-				record.MaterialPtr = m_MaterialPtr;
+				record.MaterialPtr = &m_Material;
 				return true;
 			}
 			temp = (-b + sqrt(discriminant)) / a;
@@ -46,7 +46,7 @@ class Sphere : public Hittable
 				record.T		   = temp;
 				record.Location	   = ray.point_at_parameter(record.T);
 				record.Normal	   = ((record.Location - m_Center) / m_Radius).make_unit_vector();
-				record.MaterialPtr = m_MaterialPtr;
+				record.MaterialPtr = &m_Material;
 				return true;
 			}
 		}
@@ -58,8 +58,13 @@ class Sphere : public Hittable
 		return m_BoundingBox;
 	}
 
-	vec3				  m_Center;
-	Float				  m_Radius;
-	AABB				  m_BoundingBox;
-	const Material* const m_MaterialPtr;
+	__device__ [[nodiscard]] bool IsLeaf() const override
+	{
+		return true;
+	}
+
+	vec3	 m_Center;
+	Float	 m_Radius;
+	AABB	 m_BoundingBox;
+	Material m_Material;
 };

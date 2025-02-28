@@ -15,7 +15,7 @@
 //inline HittableList RandomScene() {
 //	HittableList world;
 //
-//	auto ground_material = eastl::make_shared<Lambert>(vec3(0.5, 0.5, 0.5));
+//	auto ground_material = eastl::make_shared<u_Lambert>(vec3(0.5, 0.5, 0.5));
 //	world.Add(new Sphere(vec3(0.0f, -1000.0f, 0.0f), 1000.0f, ground_material));
 //
 //	auto seed = (uint32_t)rand();
@@ -30,32 +30,32 @@
 //				if (choose_mat < 0.8f) {
 //					// diffuse
 //					auto albedo = RandomVec3(seed) * RandomVec3(seed);
-//					auto sphere_material = eastl::make_shared<Lambert>(albedo);
+//					auto sphere_material = eastl::make_shared<u_Lambert>(albedo);
 //					world.Add(new Sphere(center, 0.2f, sphere_material));
 //				}
 //				else if (choose_mat < 0.95f) {
 //					// metal
 //					auto albedo = RandomVec3(seed, 0.5f, 1.0f);
 //					auto fuzz = RandomFloat(seed, 0.0f, 0.5f); // 0, 0.5
-//					auto sphere_material = eastl::make_shared<Metal>(albedo, fuzz);
+//					auto sphere_material = eastl::make_shared<u_Metal>(albedo, fuzz);
 //					world.Add(new Sphere(center, 0.2f, sphere_material));
 //				}
 //				else {
 //					// glass
-//					auto sphere_material = eastl::make_shared<Dielectric>(1.5f);
+//					auto sphere_material = eastl::make_shared<u_Dielectric>(1.5f);
 //					world.Add(new Sphere(center, 0.2f, sphere_material));
 //				}
 //			}
 //		}
 //	}
 //
-//	auto material1 = eastl::make_shared<Dielectric>(1.5f);
+//	auto material1 = eastl::make_shared<u_Dielectric>(1.5f);
 //	world.Add(new Sphere(vec3(0, 1, 0), 1.0f, material1));
 //
-//	auto material2 = eastl::make_shared<Lambert>(vec3(0.4f, 0.2f, 0.1f));
+//	auto material2 = eastl::make_shared<u_Lambert>(vec3(0.4f, 0.2f, 0.1f));
 //	world.Add(new Sphere(vec3(-4, 1, 0), 1.0, material2));
 //
-//	auto material3 = eastl::make_shared<Metal>(vec3(0.7f, 0.6f, 0.5f), 0.0f);
+//	auto material3 = eastl::make_shared<u_Metal>(vec3(0.7f, 0.6f, 0.5f), 0.0f);
 //	world.Add(new Sphere(vec3(4, 1, 0), 1.0, material3));
 //
 //	return { new BVHNode(world, 0.0, 1.0) };

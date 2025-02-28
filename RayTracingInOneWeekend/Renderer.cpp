@@ -13,7 +13,7 @@ sf::Image Renderer::Render(const uint32_t width, const uint32_t height)
 {
 	// Image
 	const float		aspectRatio		= (float)width / (float)height;
-	constexpr int	samplesPerPixel = 50;
+	constexpr int	samplesPerPixel = 30;
 	constexpr float colorMul		= 1.0f / (float)samplesPerPixel;
 	constexpr int	maxDepth		= 50;
 

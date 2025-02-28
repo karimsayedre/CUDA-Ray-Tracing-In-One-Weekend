@@ -12,10 +12,8 @@
 #include "CudaCamera.cuh"
 #include "HittableList.h"
 #include "Random.h"
+#include "Material.h"
 #include "Sphere.h"
-#include "Lambert.h"
-#include "Metal.h"
-#include "Dielectric.h"
 
 #define RND (curand_uniform(&local_rand_state))
 
@@ -62,7 +60,7 @@ __global__ void create_world(Sphere* d_spheres, Hittable** d_world, int nx, int 
 		// Ground sphere:
 		new (&d_spheres[i++]) Sphere(vec3(0, -1000.0f, -1),
 									 1000.0f,
-									 new Lambert(vec3(0.5f, 0.5f, 0.5f)));
+									 Material(MaterialType::Lambert, vec3(0.5f, 0.5f, 0.5f)));
 
 		// For each grid position:
 		for (int a = -11; a < 11; a++)
@@ -76,24 +74,21 @@ __global__ void create_world(Sphere* d_spheres, Hittable** d_world, int nx, int 
 					// Create a Lambertian sphere
 					new (&d_spheres[i++]) Sphere(center,
 												 0.2f,
-												 new Lambert(vec3(RND * RND, RND * RND, RND * RND)));
+												 Material(MaterialType::Lambert, vec3(RND * RND, RND * RND, RND * RND)));
 				}
 				else if (choose_mat < 0.95f)
 				{
-					// Create a Metal sphere
+					// Create a u_Metal sphere
 					new (&d_spheres[i++]) Sphere(center,
 												 0.2f,
-												 new Metal(vec3(0.5f * (1.0f + RND),
-																0.5f * (1.0f + RND),
-																0.5f * (1.0f + RND)),
-														   0.5f * RND));
+												 Material(MaterialType::Metal, vec3(0.5f * (1 + RND), 0.5f * (1 + RND), 0.5f * (1 + RND)), 0.5f * RND));
 				}
 				else
 				{
-					// Create a Dielectric sphere
+					// Create a u_Dielectric sphere
 					new (&d_spheres[i++]) Sphere(center,
 												 0.2f,
-												 new Dielectric(1.5));
+												 Material(MaterialType::Dielectric, 1.0, 0.0f, 1.5f));
 				}
 			}
 		}
@@ -101,13 +96,15 @@ __global__ void create_world(Sphere* d_spheres, Hittable** d_world, int nx, int 
 		// Add the three big spheres:
 		new (&d_spheres[i++]) Sphere(vec3(0, 1, 0),
 									 1.0f,
-									 new Dielectric(1.5));
+									 Material(MaterialType::Dielectric, 1.0, 0.0f, 1.5f));
+
 		new (&d_spheres[i++]) Sphere(vec3(-4, 1, 0),
 									 1.0f,
-									 new Lambert(vec3(0.4f, 0.2f, 0.1f)));
+									 Material(MaterialType::Lambert, vec3(0.4f, 0.2f, 0.1f)));
+
 		new (&d_spheres[i++]) Sphere(vec3(4, 1, 0),
 									 1.0f,
-									 new Metal(vec3(0.7f, 0.6f, 0.5f), 0.0f));
+									 Material(MaterialType::Metal, vec3(0.7f, 0.6f, 0.5f), 0.0f));
 
 		*rand_state = local_rand_state;
 
@@ -117,6 +114,7 @@ __global__ void create_world(Sphere* d_spheres, Hittable** d_world, int nx, int 
 			spherePtrs[j] = reinterpret_cast<Hittable*>(&d_spheres[j]);
 		}
 		*d_world = new BVHNode(HittableList(spherePtrs, i), 0.0, 1.0, &local_rand_state);
+		delete[] spherePtrs;
 	}
 }
 
@@ -141,6 +139,17 @@ __global__ void create_world(Sphere* d_spheres, Hittable** d_world, int nx, int 
 			{
 				cur_attenuation *= attenuation;
 				cur_ray = scattered;
+
+				//// Russian Roulette only in shadows
+				//if (cur_attenuation.x() < 0.001f || cur_attenuation.y() < 0.001f || cur_attenuation.z() < 0.001f)
+				//{
+				//	float rrPcont = (std::max(cur_attenuation.x(), std::max(cur_attenuation.y(), cur_attenuation.z())) + 0.001f);
+
+				//	if (curand_uniform(local_rand_state) > rrPcont)
+				//		break; // Terminate the path
+
+				//	cur_attenuation /= rrPcont; // Adjust throughput for Russian Roulette
+				//}
 			}
 			else
 			{
@@ -194,7 +203,7 @@ __host__ void CudaRenderer::Init()
 	checkCudaErrors(cudaMalloc((void**)&d_rand_state2, 1 * sizeof(curandState)));
 
 	int num_hitables = 22 * 22 + 1 + 3;
-	checkCudaErrors(cudaMalloc((void**)&d_list, num_hitables * sizeof(Sphere)));
+	checkCudaErrors(cudaMallocManaged((void**)&d_list, num_hitables * sizeof(Sphere)));
 	checkCudaErrors(cudaMalloc((void**)&d_world, sizeof(Hittable*)));
 	checkCudaErrors(cudaMalloc((void**)&d_camera, sizeof(Camera)));
 
@@ -217,7 +226,7 @@ __host__ void CudaRenderer::Init()
 
 __host__ void CudaRenderer::Render() const
 {
-	uint32_t threads = 8;
+	uint32_t threads = 16;
 	dim3	 blocks(m_Width / threads + 1, m_Height / threads + 1);
 	dim3	 workGroup(threads, threads, 1);
 	float	 aspectRatio = float(m_Width) / float(m_Height);
