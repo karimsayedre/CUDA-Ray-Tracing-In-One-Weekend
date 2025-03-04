@@ -1,7 +1,10 @@
 #pragma once
 #include <cuda_runtime.h>
+#include <numbers>
 #include "Vec3.h"
 #include <glm/geometric.hpp>
+
+#include "CudaCamera.cuh"
 
 //__device__ int RandomInt(uint32_t& seed, const int min, const int max);
 
@@ -29,17 +32,53 @@ __device__ inline float RandomFloat(uint32_t& seed, const float min, const float
 	return min + (float)(seed) / (float)(UINT_MAX / (max - min));
 }
 
+__device__ inline uint32_t RandomInt(uint32_t& seed)
+{
+	// LCG values from Numerical Recipes
+	return (seed = (1664525 * seed + 1013904223));
+}
+
+__device__ inline float RandomFloat(uint32_t& seed)
+{
+	//// Float version using bitmask from Numerical Recipes
+	// const uint one = 0x3f800000;
+	// const uint msk = 0x007fffff;
+	// return uintBitsToFloat(one | (msk & (RandomInt(seed) >> 9))) - 1;
+
+	// Faster version from NVIDIA examples; quality good enough for our use case.
+	return (float(RandomInt(seed) & 0x00FFFFFF) / float(0x01000000));
+}
+
 //__device__ int RandomInt(uint32_t& seed, const int min, const int max)
 //{
 //	return static_cast<int>(RandomFloat(seed, (float)min, (float)max + 1.0f));
 //}
 
-__device__ inline vec3 RandomVec3(uint32_t& seed, const float min = 0.0f, const float max = 1.0f)
+__device__ inline vec3 RandomVec3(uint32_t& seed, const float min, const float max)
 {
 	return {RandomFloat(seed, min, max), RandomFloat(seed, min, max), RandomFloat(seed, min, max)};
 }
 
-__device__ inline vec3 RandomNormalizedVector(uint32_t& seed)
+__device__ inline vec3 RandomVec3(uint32_t& seed)
 {
-	return (RandomVec3(seed).make_unit_vector());
+	return {RandomFloat(seed), RandomFloat(seed), RandomFloat(seed)};
+}
+
+//__device__ inline vec3 RandomNormalizedVector(uint32_t& seed)
+//{
+//	return (RandomVec3(seed).make_unit_vector());
+//}
+
+__device__ __forceinline__ vec3 randomUnitVector(uint32_t& randSeed)
+{
+	// Generate a random direction uniformly on the unit sphere
+	// (One possible approach: spherical coordinates)
+	float u = RandomFloat(randSeed);
+	float v = RandomFloat(randSeed);
+
+	float phi = 2.f * std::numbers::pi_v<float> * u;
+	float z   = 1.f - 2.f * v;      // Range [-1, 1]
+	float r   = sqrtf(1.f - z * z); // Radius in xy-plane
+
+	return {r * cosf(phi), r * sinf(phi), z};
 }

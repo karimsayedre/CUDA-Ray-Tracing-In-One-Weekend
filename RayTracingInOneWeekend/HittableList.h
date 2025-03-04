@@ -18,23 +18,23 @@ class HittableList : public Hittable
 		}
 	}
 
-	__device__ AABB GetBoundingBox(double time0, double time1) const override
+	__device__ const AABB& GetBoundingBox(double time0, double time1) const override
 	{
 		return m_BoundingBox;
 	}
 
-	__device__ bool Hit(const Ray& ray, const Float tMin, const Float tMax, HitRecord& record) const override
+	__device__ __noinline__ bool Hit(const Ray& ray, const Float tMin, Float tMax, HitRecord& record) const override
 	{
 		HitRecord tempRecord;
 		bool	  hitAnything  = false;
-		Float	  closestSoFar = tMax;
+		//Float	  closestSoFar = tMax;
 
 		for (uint32_t i = 0; i < m_Count; i++)
 		{
-			if (m_Objects[i]->Hit(ray, tMin, closestSoFar, tempRecord))
+			if (m_Objects[i]->Hit(ray, tMin, tMax, tempRecord))
 			{
 				hitAnything	 = true;
-				closestSoFar = tempRecord.T;
+				tMax		= tempRecord.T;
 				record		 = tempRecord;
 			}
 		}

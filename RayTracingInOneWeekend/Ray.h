@@ -5,12 +5,11 @@
 class Ray
 {
   public:
-	[[nodiscard]] __device__ Ray() noexcept
-		: m_Origin(), m_Direction(), m_InvDirection()
-	{
-	}
+	//[[nodiscard]] __device__ Ray() noexcept
+	//{
+	//}
 	[[nodiscard]] __device__ Ray(const vec3& origin, const vec3& direction) noexcept
-		: m_Origin(origin), m_Direction(direction), m_InvDirection(1.0f / direction)
+		: m_Origin(origin), m_Direction(direction)/*, m_InvDirection(1.0f / direction)*/
 	{
 	}
 
@@ -22,10 +21,10 @@ class Ray
 	{
 		return m_Direction;
 	}
-	[[nodiscard]] __device__ vec3 InvDirection() const noexcept
-	{
-		return m_InvDirection;
-	}
+	//[[nodiscard]] __device__ vec3 InvDirection() const noexcept
+	//{
+	//	return m_InvDirection;
+	//}
 
 	[[nodiscard]] __device__ vec3 point_at_parameter(float t) const
 	{
@@ -40,5 +39,5 @@ class Ray
   private:
 	vec3 m_Origin;
 	vec3 m_Direction;
-	vec3 m_InvDirection;
+	//vec3 m_InvDirection;
 };

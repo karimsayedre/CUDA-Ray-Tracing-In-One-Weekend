@@ -74,7 +74,7 @@ class vec3
 			case 1: return e.y;
 			case 2: return e.z;
 		}
-		//assert(false);
+		// assert(false);
 		return 0;
 	}
 	__host__ __device__ inline float& operator[](int i) noexcept
@@ -85,7 +85,7 @@ class vec3
 			case 1: return e.y;
 			case 2: return e.z;
 		}
-		//assert(false);
+		// assert(false);
 		return e.x;
 	};
 
@@ -231,11 +231,82 @@ __host__ __device__ inline vec3& vec3::operator/=(const float t)
 	e.z *= k;
 	return *this;
 }
+#include "vector_functions.h"
+#include <curand_kernel.h>
+// Platform detection
+#if 0
+// CUDA environment
+#define IS_CUDA 1
+#else
+#define IS_CUDA 0
+#endif
 
-__host__ __device__ inline vec3 unit_vector(vec3 v)
+// Fast reciprocal square root function implementation (1/sqrt(x))
+__device__ inline float custom_rsqrtf(float x)
 {
-	return v / v.length();
+#if IS_CUDA
+	// On CUDA, use the built-in rsqrtf
+	return rsqrtf(x);
+#else
+	// On CPU, implement the fast inverse square root algorithm
+
+	// Method using union for type punning (avoids compiler warnings/errors)
+	union
+	{
+		float f;
+		int	  i;
+	} conv;
+
+	float x2 = x * 0.5f;
+	conv.f	 = x;
+	conv.i	 = 0x5f3759df - (conv.i >> 1);
+	x		 = conv.f;
+
+	// Newton iterations for refinement
+	x = x * (1.5f - x2 * x * x); // First iteration
+	// x = x * (1.5f - x2 * x * x);  // Optional second iteration for more precision
+
+	return x;
+#endif
 }
+
+__device__ inline vec3 unit_vector(const vec3& v)
+{
+	float invLen = custom_rsqrtf(v.x() * v.x() + v.y() * v.y() + v.z() * v.z());
+	return {v.x() * invLen, v.y() * invLen, v.z() * invLen};
+}
+
+__device__ __forceinline__ vec3 reflect(const vec3& v, const vec3& n)
+{
+	return v - 2.f * dot(v, n) * n;
+}
+
+__device__ __forceinline__ bool refract(const vec3& v, const vec3& n, float niOverNt, vec3& outRefracted)
+{
+	float dt		   = dot(v, n);
+	float discriminant = 1.f - niOverNt * niOverNt * (1.f - dt * dt);
+	if (discriminant > 0.f)
+	{
+		outRefracted = niOverNt * (v - n * dt) - n * sqrtf(discriminant);
+		return true;
+	}
+	return false;
+}
+
+__device__ __forceinline__ float Reflectance(float cosine, float refIdx)
+{
+	// Schlick's approximation
+	float r0 = (1.f - refIdx) / (1.f + refIdx);
+	r0		 = r0 * r0;
+	return r0 + (1.f - r0) * powf((1.f - cosine), 5.f);
+}
+__device__ __forceinline__ float fastLength(const vec3& v)
+{
+	// Approximate length using rsqrtf
+	float lenSq = dot(v, v);
+	return lenSq > 0.f ? lenSq * custom_rsqrtf(lenSq) : 0.f;
+}
+
 
 namespace math
 {

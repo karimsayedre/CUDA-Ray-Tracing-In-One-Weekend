@@ -72,7 +72,7 @@ class AABB
 	{
 		for (int a = 0; a < 3; a++)
 		{
-			auto invD = r.InvDirection()[a];
+			auto invD = 1.0f / r.Direction()[a];
 			auto orig = r.Origin()[a];
 
 			auto t0 = (axis(a).min - orig) * invD;
@@ -90,6 +90,15 @@ class AABB
 				return false;
 		}
 		return true;
+	}
+
+	__device__ Float DistanceToRayOrigin(const Ray& r) const
+	{
+		// Compute the vector from ray origin to box center
+		vec3 diff = vec3(x.Center(), y.Center(), z.Center()) - r.Origin();
+
+		// Return squared Euclidean distance (cheaper than sqrt)
+		return dot(diff, diff);
 	}
 
 	__device__ [[nodiscard]] int LongestAxis() const

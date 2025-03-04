@@ -22,7 +22,7 @@ class Sphere : public Hittable
 	{
 	}
 
-	__device__ bool Hit(const Ray& ray, const Float tMin, const Float tMax, HitRecord& record) const
+	__device__ __noinline__ bool Hit(const Ray& ray, const Float tMin, Float tMax, HitRecord& record) const override
 	{
 		vec3  oc		   = ray.Origin() - m_Center;
 		float a			   = dot(ray.Direction(), ray.Direction());
@@ -53,7 +53,7 @@ class Sphere : public Hittable
 		return false;
 	}
 
-	__device__ AABB GetBoundingBox(double time0, double time1) const override
+	__device__ const AABB& GetBoundingBox(double time0, double time1) const override
 	{
 		return m_BoundingBox;
 	}

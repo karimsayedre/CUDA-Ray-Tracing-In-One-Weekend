@@ -10,7 +10,7 @@
 #include "Hittable.h"
 #include "Material.h"
 
-#define checkCudaErrors(val) check_cuda((val), #val, __FILE__, __LINE__)
+#define CHECK_CUDA_ERRORS(val) check_cuda((val), #val, __FILE__, __LINE__)
 
 namespace std
 {
@@ -24,14 +24,13 @@ __host__ void check_cuda(cudaError_t result, char const* const func, const char*
 
 __device__ vec3 color(const Ray& r);
 
-
 class CudaRenderer
 {
   public:
 	__host__ CudaRenderer(const uint32_t width, const uint32_t height, const uint32_t samplesPerPixel, const uint32_t maxDepth, const float colorMul)
 		: m_Width(width), m_Height(height), m_SamplesPerPixel(samplesPerPixel), m_MaxDepth(maxDepth), m_ColorMul(colorMul)
 	{
-		checkCudaErrors(cudaMallocManaged(&d_Image, m_Width * m_Height * sizeof(float3)));
+		CHECK_CUDA_ERRORS(cudaMallocManaged(&d_Image, m_Width * m_Height * sizeof(float3)));
 	}
 
 	__host__ void Init();
@@ -40,19 +39,18 @@ class CudaRenderer
 	__host__ std::vector<float> CopyImage();
 
   private:
-
-	Hittable* d_list;
+	Hittable*  d_list;
 	Hittable** d_world;
-	Camera* d_camera;
+	Camera*	   d_camera;
 
-	curandState* d_rand_state;
+	uint32_t* d_rand_seeds;
 	curandState* d_rand_state2;
 
   private:
-	uint32_t   m_Width;
-	uint32_t   m_Height;
-	uint32_t   m_SamplesPerPixel;
-	uint32_t   m_MaxDepth;
-	float	   m_ColorMul;
-	vec3* d_Image;
+	uint32_t m_Width;
+	uint32_t m_Height;
+	uint32_t m_SamplesPerPixel;
+	uint32_t m_MaxDepth;
+	float	 m_ColorMul;
+	vec3*	 d_Image;
 };

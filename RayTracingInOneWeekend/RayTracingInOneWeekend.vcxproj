@@ -61,6 +61,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>true</LinkIncremental>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <VcpkgUseStatic>false</VcpkgUseStatic>
@@ -132,12 +133,16 @@
       </AdditionalCompilerOptions>
       <Defines>__CUDACC_VER_MAJOR__=12;GLM_FORCE_CUDA;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT</Defines>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
-      <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr</AdditionalOptions>
+      <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr -maxrregcount=0 -Xptxas=-v</AdditionalOptions>
       <PtxAsOptionV>false</PtxAsOptionV>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
       <FastMath>true</FastMath>
       <InterleaveSourceInPTX>true</InterleaveSourceInPTX>
       <GenerateLineInfo>true</GenerateLineInfo>
+      <Optimization>O3</Optimization>
+      <RuntimeChecks>Default</RuntimeChecks>
+      <TypeInfo>false</TypeInfo>
+      <Warning>W3</Warning>
     </CudaCompile>
     <CudaLink>
       <PerformDeviceLinkTimeOptimization>true</PerformDeviceLinkTimeOptimization>

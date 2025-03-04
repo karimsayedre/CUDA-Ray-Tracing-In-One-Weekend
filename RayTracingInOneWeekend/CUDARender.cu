@@ -36,18 +36,20 @@ __global__ void rand_init(curandState* rand_state)
 	}
 }
 
-__global__ void render_init(int max_x, int max_y, curandState* rand_state)
+__global__ void render_init(uint32_t max_x, uint32_t max_y, uint32_t* rand_state)
 {
-	int i = threadIdx.x + blockIdx.x * blockDim.x;
-	int j = threadIdx.y + blockIdx.y * blockDim.y;
+	uint32_t i = threadIdx.x + blockIdx.x * blockDim.x;
+	uint32_t j = threadIdx.y + blockIdx.y * blockDim.y;
 	if ((i >= max_x) || (j >= max_y))
 		return;
-	int pixel_index = j * max_x + i;
+	uint32_t pixel_index = j * max_x + i;
 	// Original: Each thread gets same seed, a different sequence number, no offset
 	// curand_init(1984, pixel_index, 0, &rand_state[pixel_index]);
 	// BUGFIX, see Issue#2: Each thread gets different seed, same sequence for
 	// performance improvement of about 2x!
-	curand_init(1984 + pixel_index, 0, 0, &rand_state[pixel_index]);
+	//curand_init(1984 + pixel_index, 0, 0, &rand_state[pixel_index]);
+
+	rand_state[pixel_index] = pcg_hash(1984 + pixel_index);
 }
 
 __global__ void create_world(Sphere* d_spheres, Hittable** d_world, int nx, int ny, curandState* rand_state)
@@ -124,24 +126,24 @@ __global__ void create_world(Sphere* d_spheres, Hittable** d_world, int nx, int 
 //	return vec3(v.x() / length, v.y() / length, v.z() / length);
 //}
 
-[[nodiscard]] __device__ vec3 RayColor(Ray ray, Hittable** world, const uint32_t depth, curandState* local_rand_state)
+[[nodiscard]] __device__ vec3 RayColor(Ray& ray, Hittable* __restrict__* __restrict__ world, const uint32_t depth, uint32_t& randSeed)
 {
-	Ray	 cur_ray		 = ray;
+	//Ray	 cur_ray		 = ray;
 	vec3 cur_attenuation = vec3(1.0, 1.0, 1.0);
 	for (uint32_t i = 0; i < depth; i++)
 	{
 		HitRecord rec;
-		if ((*world)->Hit(cur_ray, 0.001f, FLT_MAX, rec))
+		if ((BVHNode*)(*world)->Hit(ray, 0.001f, FLT_MAX, rec))
 		{
-			Ray	 scattered;
-			vec3 attenuation;
-			if (rec.MaterialPtr->Scatter(cur_ray, rec, attenuation, scattered, local_rand_state))
+			//Ray	 scattered;
+			//vec3 attenuation;
+			if (rec.MaterialPtr->Scatter(ray, rec, cur_attenuation, randSeed))
 			{
-				cur_attenuation *= attenuation;
-				cur_ray = scattered;
+				//cur_attenuation *= attenuation;
+				//cur_ray = scattered;
 
-				//// Russian Roulette only in shadows
-				//if (cur_attenuation.x() < 0.001f || cur_attenuation.y() < 0.001f || cur_attenuation.z() < 0.001f)
+				//// Russian Roulette
+				// if (cur_attenuation.x() < 0.001f || cur_attenuation.y() < 0.001f || cur_attenuation.z() < 0.001f)
 				//{
 				//	float rrPcont = (std::max(cur_attenuation.x(), std::max(cur_attenuation.y(), cur_attenuation.z())) + 0.001f);
 
@@ -158,37 +160,37 @@ __global__ void create_world(Sphere* d_spheres, Hittable** d_world, int nx, int 
 		}
 		else
 		{
-			vec3  unit_direction = unit_vector(cur_ray.Direction());
+			vec3  unit_direction = unit_vector(ray.Direction());
 			float t				 = 0.5f * (unit_direction.y() + 1.0f);
-			vec3  c				 = (1.0f - t) * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
+			vec3  c				 = (1.0f - t) * vec3(1.0, 1.0, 1.0) + t * vec3(0.5f, 0.7f, 1.0f);
 			return cur_attenuation * c;
 		}
 	}
 	return {0.0, 0.0, 0.0}; // exceeded recursion
 }
 
-__global__ void InternalRender(vec3* fb, Hittable** world, uint32_t max_x, uint32_t max_y, Camera* camera, uint32_t samplersPerPixel, float colorMul, uint32_t maxDepth, curandState* rand_state)
+__global__ void InternalRender(vec3* __restrict__ fb, Hittable* __restrict__* __restrict__ world, uint32_t max_x, uint32_t max_y, Camera* camera, uint32_t samplersPerPixel, float colorMul, uint32_t maxDepth, uint32_t* randSeeds)
 {
-	int i = threadIdx.x + blockIdx.x * blockDim.x;
-	int j = threadIdx.y + blockIdx.y * blockDim.y;
+	uint32_t i = threadIdx.x + blockIdx.x * blockDim.x;
+	uint32_t j = threadIdx.y + blockIdx.y * blockDim.y;
 	if ((i >= max_x) || (j >= max_y))
 		return;
 
-	int pixel_index = j * max_x + i;
+	uint32_t pixel_index = j * max_x + i;
 
-	curandState& local_rand_state = rand_state[pixel_index];
+	uint32_t seed = randSeeds[pixel_index];
 	vec3		 pixel_color(0.0f);
 	for (uint32_t s = 0; s < samplersPerPixel; s++)
 	{
-		float u	 = float(float(i) + curand_uniform(&local_rand_state)) / float(max_x);
-		float v	 = float(float(j) + curand_uniform(&local_rand_state)) / float(max_y);
+		float u	 = float(float(i) + RandomFloat(seed)) / float(max_x);
+		float v	 = float(float(j) + RandomFloat(seed)) / float(max_y);
 		u		 = 1.0f - u;
 		v		 = 1.0f - v;
 		auto ray = camera->GetRay(u, v);
 
-		pixel_color += RayColor(ray, world, maxDepth, &local_rand_state);
+		pixel_color += RayColor(ray, world, maxDepth, seed);
 	}
-	rand_state[pixel_index] = local_rand_state;
+	randSeeds[pixel_index] = seed;
 	pixel_color *= colorMul;
 	pixel_color		= vec3(sqrt(pixel_color.x()), sqrt(pixel_color.y()), sqrt(pixel_color.z()));
 	fb[pixel_index] = pixel_color;
@@ -196,61 +198,64 @@ __global__ void InternalRender(vec3* fb, Hittable** world, uint32_t max_x, uint3
 
 __host__ void CudaRenderer::Init()
 {
+
 	cudaDeviceSetLimit(cudaLimitStackSize, 4096);
 
 	// allocate random state
-	checkCudaErrors(cudaMalloc((void**)&d_rand_state, m_Width * m_Height * sizeof(curandState)));
-	checkCudaErrors(cudaMalloc((void**)&d_rand_state2, 1 * sizeof(curandState)));
+	CHECK_CUDA_ERRORS(cudaMalloc((void**)&d_rand_seeds, m_Width * m_Height * sizeof(uint32_t)));
+	CHECK_CUDA_ERRORS(cudaMalloc((void**)&d_rand_state2, 1 * sizeof(curandState)));
 
-	int num_hitables = 22 * 22 + 1 + 3;
-	checkCudaErrors(cudaMallocManaged((void**)&d_list, num_hitables * sizeof(Sphere)));
-	checkCudaErrors(cudaMalloc((void**)&d_world, sizeof(Hittable*)));
-	checkCudaErrors(cudaMalloc((void**)&d_camera, sizeof(Camera)));
+	constexpr int numHitables = 22 * 22 + 1 + 3;
+	CHECK_CUDA_ERRORS(cudaMallocManaged((void**)&d_list, numHitables * sizeof(Sphere)));
+	CHECK_CUDA_ERRORS(cudaMalloc((void**)&d_world, sizeof(Hittable*)));
+	CHECK_CUDA_ERRORS(cudaMalloc((void**)&d_camera, sizeof(Camera)));
 
 	rand_init<<<1, 1>>>(d_rand_state2);
-	checkCudaErrors(cudaGetLastError());
-	checkCudaErrors(cudaDeviceSynchronize());
+	CHECK_CUDA_ERRORS(cudaGetLastError());
+	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 
-	uint32_t threads = 8;
-	dim3	 blocks(m_Width / threads + 1, m_Height / threads + 1);
-	dim3	 workGroup(threads, threads, 1);
+	dim3 block(16, 16);
+	dim3 grid((m_Width + block.x - 1) / block.x,
+			  (m_Height + block.y - 1) / block.y);
 
-	render_init<<<blocks, workGroup>>>(m_Width, m_Height, d_rand_state);
-	checkCudaErrors(cudaGetLastError());
-	checkCudaErrors(cudaDeviceSynchronize());
+	render_init<<<grid, block>>>(m_Width, m_Height, d_rand_seeds);
+	CHECK_CUDA_ERRORS(cudaGetLastError());
+	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 
 	create_world<<<1, 1>>>((Sphere*)d_list, d_world, m_Width, m_Height, d_rand_state2);
-	checkCudaErrors(cudaGetLastError());
-	checkCudaErrors(cudaDeviceSynchronize());
+	CHECK_CUDA_ERRORS(cudaGetLastError());
+	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
+
+
 }
 
 __host__ void CudaRenderer::Render() const
 {
-	uint32_t threads = 16;
-	dim3	 blocks(m_Width / threads + 1, m_Height / threads + 1);
-	dim3	 workGroup(threads, threads, 1);
-	float	 aspectRatio = float(m_Width) / float(m_Height);
+	dim3 block(16, 16);
+	dim3 grid((m_Width + block.x - 1) / block.x,
+			  (m_Height + block.y - 1) / block.y);
+
+	float aspectRatio = float(m_Width) / float(m_Height);
 
 	static float distance = 0.0f;
 	Camera		 camera(vec3(13.0f + distance, 2.0f, 3.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f), 20.0f, aspectRatio);
 
-	checkCudaErrors(cudaMemcpy(d_camera, &camera, sizeof(Camera), cudaMemcpyHostToDevice));
-	checkCudaErrors(cudaDeviceSynchronize());
+	CHECK_CUDA_ERRORS(cudaMemcpy(d_camera, &camera, sizeof(Camera), cudaMemcpyHostToDevice));
+	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 	distance += 0.1f;
 
 	if (distance > 10.0f)
 		distance = 0.0f;
 
-	clock_t start, stop;
-	start = clock();
+	const clock_t start = clock();
 	// Render our buffer
-	InternalRender<<<blocks, workGroup>>>(d_Image, d_world, m_Width, m_Height, d_camera, m_SamplesPerPixel, m_ColorMul, m_MaxDepth, d_rand_state);
-	checkCudaErrors(cudaGetLastError());
-	checkCudaErrors(cudaDeviceSynchronize());
+	InternalRender<<<grid, block>>>(d_Image, d_world, m_Width, m_Height, d_camera, m_SamplesPerPixel, m_ColorMul, m_MaxDepth, d_rand_seeds);
+	CHECK_CUDA_ERRORS(cudaGetLastError());
+	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 
-	stop				 = clock();
-	double timer_seconds = ((double)(stop - start));
-	std::cerr << "took " << timer_seconds << "ms.\n";
+	const clock_t stop		   = clock();
+	const double  timerSeconds = stop - start;
+	std::cerr << "took " << timerSeconds << "ms.\n";
 }
 
 __host__ std::vector<float> CudaRenderer::CopyImage()

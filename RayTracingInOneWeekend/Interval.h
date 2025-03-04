@@ -54,11 +54,16 @@ class Interval
 		return x;
 	}
 
+	__device__ [[nodiscard]] float Center() const
+	{
+		return 0.5f * (min + max);
+	}
+
 	static const Interval empty;
 	static const Interval universe;
 };
 
-inline const Interval Interval::empty	  = Interval(+std::numeric_limits<Float>::infinity(), -std::numeric_limits<Float>::infinity());
+inline const Interval Interval::empty	 = Interval(+std::numeric_limits<Float>::infinity(), -std::numeric_limits<Float>::infinity());
 inline const Interval Interval::universe = Interval(-std::numeric_limits<Float>::infinity(), +std::numeric_limits<Float>::infinity());
 
 __device__ inline Interval operator+(const Interval& ival, Float displacement)

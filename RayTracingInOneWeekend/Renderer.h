@@ -67,35 +67,35 @@ class Renderer
 public:
 
 	
-	[[nodiscard]] inline static vec3 RayColor(Ray ray, const Hittable& world, const int depth, curandState* local_rand_state)
-	{
-		vec3 color = vec3{1.0};
+	//[[nodiscard]] inline static vec3 RayColor(Ray ray, const Hittable& world, const int depth, curandState* local_rand_state)
+	//{
+	//	vec3 color = vec3{1.0};
 
-		vec3 attenuation = vec3{ 1.0f };
-		for (int i = 0; i < depth; i++) {
-			HitRecord hitRecord;
-			if (!world.Hit(ray, 0.1f, Infinity, hitRecord)) {
-				const vec3 unitDirection = (ray.Direction().make_unit_vector());
-				auto	   t			 = 0.5f * (unitDirection.y() + 1.0f);
-				color *= 1.0f - t * vec3(1.0f) + t * vec3(0.5f, 0.7f, 1.0f);
-				break;
-			}
+	//	vec3 attenuation = vec3{ 1.0f };
+	//	for (int i = 0; i < depth; i++) {
+	//		HitRecord hitRecord;
+	//		if (!world.Hit(ray, 0.1f, Infinity, hitRecord)) {
+	//			const vec3 unitDirection = (ray.Direction().make_unit_vector());
+	//			auto	   t			 = 0.5f * (unitDirection.y() + 1.0f);
+	//			color *= 1.0f - t * vec3(1.0f) + t * vec3(0.5f, 0.7f, 1.0f);
+	//			break;
+	//		}
 
-			Ray scattered;
-			if (hitRecord.MaterialPtr->Scatter(ray, hitRecord, attenuation, scattered, local_rand_state))
-			{
-				color *= attenuation;
-				ray = scattered;
-			}
-			else
-			{
-				break;
-			}
-			
-		}
+	//		Ray scattered;
+	//		if (hitRecord.MaterialPtr->Scatter(ray, hitRecord, attenuation, scattered, local_rand_state))
+	//		{
+	//			color *= attenuation;
+	//			ray = scattered;
+	//		}
+	//		else
+	//		{
+	//			break;
+	//		}
+	//		
+	//	}
 
-		return color * attenuation;
-	}
+	//	return color * attenuation;
+	//}
 
 
 	sf::Image Render(const uint32_t width, const uint32_t height);

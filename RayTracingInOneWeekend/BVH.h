@@ -105,29 +105,30 @@ class BVHNode : public Hittable
 		delete[] objects;
 	}
 
-	__device__ bool Hit(const Ray& r, const Float tMin, Float tMax, HitRecord& rec) const override
+__device__ __noinline__ bool Hit(const Ray& r, const Float tMin, Float tMax, HitRecord& rec) const override
 	{
-		Hittable* stack[50]; // Adjust stack depth as needed
-		int		  stack_ptr		 = 0;
-		bool	  hit_anything	 = false;
-		Float	  closest_so_far = tMax;
+		Hittable* __restrict__ stack[10]; // Fixed-size traversal stack
+		unsigned char stack_ptr		 = 0; // Use an 8-bit integer since depth <= 10
+		bool		  hit_anything	 = false;
+		Float		  closest_so_far = tMax; // Local variable for the closest hit
 
-		// Push root children (right first, then left to process left first)
+		// Push root children (right first, then left so left is processed first)
 		stack[stack_ptr++] = m_Right;
 		stack[stack_ptr++] = m_Left;
+
+		HitRecord temp_rec; // Declare once outside the loop to reuse the register(s)
 
 		while (stack_ptr > 0)
 		{
 			Hittable* node = stack[--stack_ptr];
 
 			// Early out: Skip nodes whose AABB doesn't intersect [tMin, closest_so_far]
-			AABB box = node->GetBoundingBox(0, 0);
+			const AABB& box = node->GetBoundingBox(0.0, 1.0);
 			if (!box.Hit(r, {tMin, closest_so_far}))
 				continue;
 
 			if (node->IsLeaf())
-			{ // Assume `IsLeaf()` checks for primitive (e.g., Sphere)
-				HitRecord temp_rec;
+			{
 				if (node->Hit(r, tMin, closest_so_far, temp_rec))
 				{
 					hit_anything   = true;
@@ -136,9 +137,9 @@ class BVHNode : public Hittable
 				}
 			}
 			else
-			{ // Internal BVHNode
+			{
 				BVHNode* bvh_node = static_cast<BVHNode*>(node);
-				// Push children in reverse order (right first, left next)
+				// Push children without sorting; order remains consistent.
 				stack[stack_ptr++] = bvh_node->m_Right;
 				stack[stack_ptr++] = bvh_node->m_Left;
 			}
@@ -146,7 +147,8 @@ class BVHNode : public Hittable
 		return hit_anything;
 	}
 
-	__device__ AABB GetBoundingBox(double time0, double time1) const override
+
+	__device__ const AABB& GetBoundingBox(double time0, double time1) const override
 	{
 		return m_Box;
 	}

@@ -5,7 +5,7 @@
 #include <iostream>
 #include <fmt/chrono.h>
 #include <SFML/Graphics.hpp>
-#include "Camera.h"
+//#include "Camera.h"
 #include "CudaRenderer.cuh"
 #include "Log.h"
 

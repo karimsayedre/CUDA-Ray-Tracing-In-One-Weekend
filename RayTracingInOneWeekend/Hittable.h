@@ -15,12 +15,12 @@ struct HitRecord
 	vec3			Normal;
 	Float			T;
 	const Material* MaterialPtr;
-	bool			FrontFace;
-	__device__ void SetFaceNormal(const Ray& ray, const vec3& outwardNormal)
-	{
-		FrontFace = dot(ray.Direction(), outwardNormal) < 0.0f;
-		Normal	  = FrontFace ? outwardNormal : -outwardNormal;
-	}
+	//bool			FrontFace;
+	//__device__ void SetFaceNormal(const Ray& ray, const vec3& outwardNormal)
+	//{
+		//FrontFace = dot(ray.Direction(), outwardNormal) < 0.0f;
+		//Normal	  = FrontFace ? outwardNormal : -outwardNormal;
+	//}
 };
 
 // enum class HittableType
@@ -61,8 +61,8 @@ class Hittable
 	//Hittable() = delete;
 
 	// Methods
-	__device__ [[nodiscard]] virtual bool Hit(const Ray& ray, float tMin, float tMax, HitRecord& record) const = 0;
-	__device__ [[nodiscard]] virtual AABB GetBoundingBox(double time0, double time1) const					   = 0;
+	__device__ [[nodiscard]] __noinline__ virtual bool Hit(const Ray& ray, float tMin, float tMax, HitRecord& record) const = 0;
+	__device__ [[nodiscard]] virtual const AABB& GetBoundingBox(double time0, double time1) const					   = 0;
 	__device__ [[nodiscard]] virtual bool IsLeaf() const													   = 0;
 
 	virtual ~Hittable() = default;
