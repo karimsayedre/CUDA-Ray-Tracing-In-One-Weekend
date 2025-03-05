@@ -9,21 +9,21 @@
 
 class Camera {
 public:
-	vec3 m_Origin;
-	vec3 m_LowerLeftCorner;
-	vec3 m_Horizontal;
-	vec3 m_Vertical;
+	glm::vec3 m_Origin;
+	glm::vec3 m_LowerLeftCorner;
+	glm::vec3 m_Horizontal;
+	glm::vec3 m_Vertical;
 
-	__host__ __device__ Camera(const vec3& lookFrom, const vec3& lookAt, const vec3& up, const float vFov, const float aspectRatio)
+	__host__ __device__ Camera(const glm::vec3& lookFrom, const glm::vec3& lookAt, const glm::vec3& up, const float vFov, const float aspectRatio)
 	{
 		const auto theta		  = vFov * ((float)M_PI) / 180.0f;
 		const auto h = std::tan(theta / 2.0f);
 		const auto viewportHeight = 2.0f * h;
 		const auto viewportWidth = aspectRatio * viewportHeight;
 
-		const auto w = (lookFrom - lookAt).make_unit_vector();
-		const auto u = (cross(up, w)).make_unit_vector();
-		const auto v = cross(w, u);
+		const auto w = glm::normalize(lookFrom - lookAt);
+		const auto u = glm::normalize(cross(up, w));
+		const auto v = glm::cross(w, u);
 
 
 		m_Origin = lookFrom;

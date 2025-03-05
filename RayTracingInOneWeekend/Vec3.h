@@ -4,7 +4,9 @@
 #include <stdlib.h>
 #include <iostream>
 #include <cuda_runtime.h>
+#include <glm/gtx/fast_square_root.hpp>
 #include <cmath>
+
 
 using Float				 = float;
 constexpr Float Infinity = std::numeric_limits<Float>::infinity();
@@ -13,6 +15,7 @@ constexpr Float Pi		 = 3.1415926535897932385f;
 
 constexpr float CUDART_INF_F = std::numeric_limits<float>::infinity();
 
+#if 0
 class vec3
 {
   public:
@@ -231,14 +234,13 @@ __host__ __device__ inline vec3& vec3::operator/=(const float t)
 	e.z *= k;
 	return *this;
 }
-#include "vector_functions.h"
-#include <curand_kernel.h>
 // Platform detection
 #if 0
 // CUDA environment
 #define IS_CUDA 1
 #else
 #define IS_CUDA 0
+#endif
 #endif
 
 // Fast reciprocal square root function implementation (1/sqrt(x))
@@ -270,18 +272,18 @@ __device__ inline float custom_rsqrtf(float x)
 #endif
 }
 
-__device__ inline vec3 unit_vector(const vec3& v)
+__device__ inline glm::vec3 unit_vector(const glm::vec3& v)
 {
-	float invLen = custom_rsqrtf(v.x() * v.x() + v.y() * v.y() + v.z() * v.z());
-	return {v.x() * invLen, v.y() * invLen, v.z() * invLen};
+	float invLen = glm::fastInverseSqrt(glm::dot(v, v));
+	return {v.x * invLen, v.y * invLen, v.z * invLen};
 }
 
-__device__ __forceinline__ vec3 reflect(const vec3& v, const vec3& n)
+__device__ __forceinline__ glm::vec3 reflect(const glm::vec3& v, const glm::vec3& n)
 {
-	return v - 2.f * dot(v, n) * n;
+	return v - 2.f * glm::dot(v, n) * n;
 }
 
-__device__ __forceinline__ bool refract(const vec3& v, const vec3& n, float niOverNt, vec3& outRefracted)
+__device__ __forceinline__ bool refract(const glm::vec3& v, const glm::vec3& n, float niOverNt, glm::vec3& outRefracted)
 {
 	float dt		   = dot(v, n);
 	float discriminant = 1.f - niOverNt * niOverNt * (1.f - dt * dt);
@@ -300,11 +302,20 @@ __device__ __forceinline__ float Reflectance(float cosine, float refIdx)
 	r0		 = r0 * r0;
 	return r0 + (1.f - r0) * powf((1.f - cosine), 5.f);
 }
-__device__ __forceinline__ float fastLength(const vec3& v)
+__device__ __forceinline__ float fastLength(const glm::vec3& v)
 {
 	// Approximate length using rsqrtf
 	float lenSq = dot(v, v);
 	return lenSq > 0.f ? lenSq * custom_rsqrtf(lenSq) : 0.f;
+}
+
+__host__ __device__ inline glm::vec3 make_unit_vector(glm::vec3 e)
+{
+	float k = 1.0f / sqrt(e.x * e.x + e.y * e.y + e.z * e.z);
+	e.x *= k;
+	e.y *= k;
+	e.z *= k;
+	return {e.x, e.y, e.z};
 }
 
 

@@ -12,23 +12,23 @@ class Sphere : public Hittable
 {
   public:
 	// Templated constructor for material type
-	__device__ Sphere(const vec3& center, Float radius, const Material& material)
+	__device__ Sphere(const glm::vec3& center, Float radius, const uint16_t& materialIndex)
 		: m_Center(center),
 		  m_Radius(radius),
 		  m_BoundingBox(
 			  m_Center - m_Radius,
 			  m_Center + m_Radius),
-		  m_Material(material)
+		  m_MaterialIndex(materialIndex)
 	{
 	}
 
 	__device__ __noinline__ bool Hit(const Ray& ray, const Float tMin, Float tMax, HitRecord& record) const override
 	{
-		vec3  oc		   = ray.Origin() - m_Center;
-		float a			   = dot(ray.Direction(), ray.Direction());
-		float b			   = dot(oc, ray.Direction());
-		float c			   = dot(oc, oc) - m_Radius * m_Radius;
-		float discriminant = b * b - a * c;
+		glm::vec3 oc		   = ray.Origin() - m_Center;
+		float	  a			   = dot(ray.Direction(), ray.Direction());
+		float	  b			   = dot(oc, ray.Direction());
+		float	  c			   = dot(oc, oc) - m_Radius * m_Radius;
+		float	  discriminant = b * b - a * c;
 		if (discriminant > 0)
 		{
 			float temp = (-b - sqrt(discriminant)) / a;
@@ -36,8 +36,8 @@ class Sphere : public Hittable
 			{
 				record.T		   = temp;
 				record.Location	   = ray.point_at_parameter(record.T);
-				record.Normal	   = ((record.Location - m_Center) / m_Radius).make_unit_vector();
-				record.MaterialPtr = &m_Material;
+				record.Normal	   = glm::normalize((record.Location - m_Center) / m_Radius);
+				record.MaterialIndex = m_MaterialIndex;
 				return true;
 			}
 			temp = (-b + sqrt(discriminant)) / a;
@@ -45,8 +45,8 @@ class Sphere : public Hittable
 			{
 				record.T		   = temp;
 				record.Location	   = ray.point_at_parameter(record.T);
-				record.Normal	   = ((record.Location - m_Center) / m_Radius).make_unit_vector();
-				record.MaterialPtr = &m_Material;
+				record.Normal	   = glm::normalize((record.Location - m_Center) / m_Radius);
+				record.MaterialIndex = m_MaterialIndex;
 				return true;
 			}
 		}
@@ -63,8 +63,9 @@ class Sphere : public Hittable
 		return true;
 	}
 
-	vec3	 m_Center;
-	Float	 m_Radius;
-	AABB	 m_BoundingBox;
-	Material m_Material;
+	glm::vec3 m_Center;
+	Float	  m_Radius;
+	AABB	  m_BoundingBox;
+	uint16_t  m_MaterialIndex;
+	// Material m_Material;
 };

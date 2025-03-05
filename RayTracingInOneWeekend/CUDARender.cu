@@ -47,66 +47,82 @@ __global__ void render_init(uint32_t max_x, uint32_t max_y, uint32_t* rand_state
 	// curand_init(1984, pixel_index, 0, &rand_state[pixel_index]);
 	// BUGFIX, see Issue#2: Each thread gets different seed, same sequence for
 	// performance improvement of about 2x!
-	//curand_init(1984 + pixel_index, 0, 0, &rand_state[pixel_index]);
+	// curand_init(1984 + pixel_index, 0, 0, &rand_state[pixel_index]);
 
 	rand_state[pixel_index] = pcg_hash(1984 + pixel_index);
 }
 
-__global__ void create_world(Sphere* d_spheres, Hittable** d_world, int nx, int ny, curandState* rand_state)
+__global__ void create_world(Sphere* d_spheres, Material* d_materials, Hittable** d_world, int nx, int ny, curandState* rand_state)
 {
 	if (threadIdx.x == 0 && blockIdx.x == 0)
 	{
 		curandState local_rand_state = *rand_state;
 		int			i				 = 0;
 
+		new (&d_materials[i]) Material(MaterialType::Lambert, glm::vec3(0.5f, 0.5f, 0.5f));
 		// Ground sphere:
-		new (&d_spheres[i++]) Sphere(vec3(0, -1000.0f, -1),
+		new (&d_spheres[i]) Sphere(glm::vec3(0, -1000.0f, -1),
 									 1000.0f,
-									 Material(MaterialType::Lambert, vec3(0.5f, 0.5f, 0.5f)));
+									 i);
+		i++;
 
 		// For each grid position:
 		for (int a = -11; a < 11; a++)
 		{
 			for (int b = -11; b < 11; b++)
 			{
-				float choose_mat = RND;
-				vec3  center(a + RND, 0.2f, b + RND);
+				float	  choose_mat = RND;
+				glm::vec3 center(a + RND, 0.2f, b + RND);
 				if (choose_mat < 0.8f)
 				{
+					new (&d_materials[i]) Material(MaterialType::Lambert, glm::vec3(RND * RND, RND * RND, RND * RND));
 					// Create a Lambertian sphere
-					new (&d_spheres[i++]) Sphere(center,
+					new (&d_spheres[i]) Sphere(center,
 												 0.2f,
-												 Material(MaterialType::Lambert, vec3(RND * RND, RND * RND, RND * RND)));
+												 i);
+					i++;
+
 				}
 				else if (choose_mat < 0.95f)
 				{
+					new (&d_materials[i]) Material(MaterialType::Metal, glm::vec3(0.5f * (1 + RND), 0.5f * (1 + RND), 0.5f * (1 + RND)), 0.5f * RND);
 					// Create a u_Metal sphere
-					new (&d_spheres[i++]) Sphere(center,
+					new (&d_spheres[i]) Sphere(center,
 												 0.2f,
-												 Material(MaterialType::Metal, vec3(0.5f * (1 + RND), 0.5f * (1 + RND), 0.5f * (1 + RND)), 0.5f * RND));
+												 i);
+					i++;
+
 				}
 				else
 				{
+					new (&d_materials[i]) Material(MaterialType::Dielectric, glm::vec3(1.0), 0.0f, 1.5f);
 					// Create a u_Dielectric sphere
-					new (&d_spheres[i++]) Sphere(center,
+					new (&d_spheres[i]) Sphere(center,
 												 0.2f,
-												 Material(MaterialType::Dielectric, 1.0, 0.0f, 1.5f));
+												i);
+					i++;
+
 				}
 			}
 		}
 
+		new (&d_materials[i]) Material(MaterialType::Dielectric, glm::vec3(1.0), 0.0f, 1.5f);
 		// Add the three big spheres:
-		new (&d_spheres[i++]) Sphere(vec3(0, 1, 0),
+		new (&d_spheres[i]) Sphere(glm::vec<3, float>(0, 1, 0),
 									 1.0f,
-									 Material(MaterialType::Dielectric, 1.0, 0.0f, 1.5f));
+									 i);
+		i++;
+		new (&d_materials[i]) Material(MaterialType::Lambert, glm::vec3(0.4f, 0.2f, 0.1f));
+		new (&d_spheres[i]) Sphere(glm::vec3(-4, 1, 0),
+									 1.0f,
+									 i);
+		i++;
 
-		new (&d_spheres[i++]) Sphere(vec3(-4, 1, 0),
+		new (&d_materials[i]) Material(MaterialType::Metal, glm::vec3(0.7f, 0.6f, 0.5f), 0.0f);
+		new (&d_spheres[i]) Sphere(glm::vec3(4, 1, 0),
 									 1.0f,
-									 Material(MaterialType::Lambert, vec3(0.4f, 0.2f, 0.1f)));
-
-		new (&d_spheres[i++]) Sphere(vec3(4, 1, 0),
-									 1.0f,
-									 Material(MaterialType::Metal, vec3(0.7f, 0.6f, 0.5f), 0.0f));
+									 i);
+		i++;
 
 		*rand_state = local_rand_state;
 
@@ -126,50 +142,50 @@ __global__ void create_world(Sphere* d_spheres, Hittable** d_world, int nx, int 
 //	return vec3(v.x() / length, v.y() / length, v.z() / length);
 //}
 
-[[nodiscard]] __device__ vec3 RayColor(Ray& ray, Hittable* __restrict__* __restrict__ world, const uint32_t depth, uint32_t& randSeed)
+__device__ glm::vec3 RayColor(Ray& ray, Hittable* __restrict__* __restrict__ world, Material* d_materials, const uint32_t depth, uint32_t& randSeed)
 {
-	//Ray	 cur_ray		 = ray;
-	vec3 cur_attenuation = vec3(1.0, 1.0, 1.0);
+	// Optimize by removing repeated computations and improving branching
+	glm::vec3 cur_attenuation(1.0f);
+	Ray		  current_ray = ray;
+
 	for (uint32_t i = 0; i < depth; i++)
 	{
 		HitRecord rec;
-		if ((BVHNode*)(*world)->Hit(ray, 0.001f, FLT_MAX, rec))
+		// Use early exit and reduce function call overhead
+		if (!static_cast<BVHNode*>(*world)->Hit(current_ray, 0.001f, FLT_MAX, rec))
 		{
-			//Ray	 scattered;
-			//vec3 attenuation;
-			if (rec.MaterialPtr->Scatter(ray, rec, cur_attenuation, randSeed))
-			{
-				//cur_attenuation *= attenuation;
-				//cur_ray = scattered;
-
-				//// Russian Roulette
-				// if (cur_attenuation.x() < 0.001f || cur_attenuation.y() < 0.001f || cur_attenuation.z() < 0.001f)
-				//{
-				//	float rrPcont = (std::max(cur_attenuation.x(), std::max(cur_attenuation.y(), cur_attenuation.z())) + 0.001f);
-
-				//	if (curand_uniform(local_rand_state) > rrPcont)
-				//		break; // Terminate the path
-
-				//	cur_attenuation /= rrPcont; // Adjust throughput for Russian Roulette
-				//}
-			}
-			else
-			{
-				return vec3(0.0, 0.0, 0.0);
-			}
+			// Precompute sky color to reduce runtime calculations
+			glm::vec3 unit_direction = glm::normalize(current_ray.Direction());
+			float	  t				 = 0.5f * (unit_direction.y + 1.0f);
+			glm::vec3 sky_color		 = (1.0f - t) * glm::vec3(1.0) + t * glm::vec3(0.5f, 0.7f, 1.0f);
+			return cur_attenuation * sky_color;
 		}
-		else
-		{
-			vec3  unit_direction = unit_vector(ray.Direction());
-			float t				 = 0.5f * (unit_direction.y() + 1.0f);
-			vec3  c				 = (1.0f - t) * vec3(1.0, 1.0, 1.0) + t * vec3(0.5f, 0.7f, 1.0f);
-			return cur_attenuation * c;
-		}
+
+		// Russian Roulette for path termination (uncomment and modify as needed)
+		//if (i > 3)
+		//{
+		//	float rrProb = fmaxf(cur_attenuation.x, fmaxf(cur_attenuation.y, cur_attenuation.z));
+		//	if (RandomFloat(randSeed) > rrProb)
+		//		break;
+		//	cur_attenuation /= rrProb;
+		//}
+
+		// Scatter ray with optimized material interaction
+		Ray scattered_ray;
+		if (!d_materials[rec.MaterialIndex].Scatter(current_ray, scattered_ray, rec, cur_attenuation, randSeed))
+			return glm::vec3(0.0f);
+
+		current_ray = scattered_ray;
+
+		// Early termination for very low contribution
+		if (fmaxf(cur_attenuation.x, fmaxf(cur_attenuation.y, cur_attenuation.z)) < 0.001f)
+			break;
 	}
-	return {0.0, 0.0, 0.0}; // exceeded recursion
+
+	return glm::vec3(0.0f); // Exceeded max depth
 }
 
-__global__ void InternalRender(vec3* __restrict__ fb, Hittable* __restrict__* __restrict__ world, uint32_t max_x, uint32_t max_y, Camera* camera, uint32_t samplersPerPixel, float colorMul, uint32_t maxDepth, uint32_t* randSeeds)
+__global__ void InternalRender(glm::vec3* __restrict__ fb, Hittable* __restrict__* __restrict__ world, Material* d_materials, uint32_t max_x, uint32_t max_y, Camera* camera, uint32_t samplersPerPixel, float colorMul, uint32_t maxDepth, uint32_t* randSeeds)
 {
 	uint32_t i = threadIdx.x + blockIdx.x * blockDim.x;
 	uint32_t j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -178,8 +194,8 @@ __global__ void InternalRender(vec3* __restrict__ fb, Hittable* __restrict__* __
 
 	uint32_t pixel_index = j * max_x + i;
 
-	uint32_t seed = randSeeds[pixel_index];
-	vec3		 pixel_color(0.0f);
+	uint32_t  seed = randSeeds[pixel_index];
+	glm::vec3 pixel_color(0.0f);
 	for (uint32_t s = 0; s < samplersPerPixel; s++)
 	{
 		float u	 = float(float(i) + RandomFloat(seed)) / float(max_x);
@@ -188,17 +204,16 @@ __global__ void InternalRender(vec3* __restrict__ fb, Hittable* __restrict__* __
 		v		 = 1.0f - v;
 		auto ray = camera->GetRay(u, v);
 
-		pixel_color += RayColor(ray, world, maxDepth, seed);
+		pixel_color += RayColor(ray, world, d_materials, maxDepth, seed);
 	}
 	randSeeds[pixel_index] = seed;
 	pixel_color *= colorMul;
-	pixel_color		= vec3(sqrt(pixel_color.x()), sqrt(pixel_color.y()), sqrt(pixel_color.z()));
+	pixel_color		= glm::sqrt(pixel_color);
 	fb[pixel_index] = pixel_color;
 }
 
 __host__ void CudaRenderer::Init()
 {
-
 	cudaDeviceSetLimit(cudaLimitStackSize, 4096);
 
 	// allocate random state
@@ -207,6 +222,7 @@ __host__ void CudaRenderer::Init()
 
 	constexpr int numHitables = 22 * 22 + 1 + 3;
 	CHECK_CUDA_ERRORS(cudaMallocManaged((void**)&d_list, numHitables * sizeof(Sphere)));
+	CHECK_CUDA_ERRORS(cudaMallocManaged((void**)&d_materials, numHitables * sizeof(Material)));
 	CHECK_CUDA_ERRORS(cudaMalloc((void**)&d_world, sizeof(Hittable*)));
 	CHECK_CUDA_ERRORS(cudaMalloc((void**)&d_camera, sizeof(Camera)));
 
@@ -214,7 +230,7 @@ __host__ void CudaRenderer::Init()
 	CHECK_CUDA_ERRORS(cudaGetLastError());
 	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 
-	dim3 block(16, 16);
+	dim3 block(8, 8);
 	dim3 grid((m_Width + block.x - 1) / block.x,
 			  (m_Height + block.y - 1) / block.y);
 
@@ -222,23 +238,21 @@ __host__ void CudaRenderer::Init()
 	CHECK_CUDA_ERRORS(cudaGetLastError());
 	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 
-	create_world<<<1, 1>>>((Sphere*)d_list, d_world, m_Width, m_Height, d_rand_state2);
+	create_world<<<1, 1>>>((Sphere*)d_list, d_materials, d_world, m_Width, m_Height, d_rand_state2);
 	CHECK_CUDA_ERRORS(cudaGetLastError());
 	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
-
-
 }
 
 __host__ void CudaRenderer::Render() const
 {
-	dim3 block(16, 16);
+	dim3 block(8, 8);
 	dim3 grid((m_Width + block.x - 1) / block.x,
 			  (m_Height + block.y - 1) / block.y);
 
 	float aspectRatio = float(m_Width) / float(m_Height);
 
 	static float distance = 0.0f;
-	Camera		 camera(vec3(13.0f + distance, 2.0f, 3.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f), 20.0f, aspectRatio);
+	Camera		 camera(glm::vec3(13.0f + distance, 2.0f, 3.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), 20.0f, aspectRatio);
 
 	CHECK_CUDA_ERRORS(cudaMemcpy(d_camera, &camera, sizeof(Camera), cudaMemcpyHostToDevice));
 	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
@@ -249,7 +263,7 @@ __host__ void CudaRenderer::Render() const
 
 	const clock_t start = clock();
 	// Render our buffer
-	InternalRender<<<grid, block>>>(d_Image, d_world, m_Width, m_Height, d_camera, m_SamplesPerPixel, m_ColorMul, m_MaxDepth, d_rand_seeds);
+	InternalRender<<<grid, block>>>(d_Image, d_world, d_materials, m_Width, m_Height, d_camera, m_SamplesPerPixel, m_ColorMul, m_MaxDepth, d_rand_seeds);
 	CHECK_CUDA_ERRORS(cudaGetLastError());
 	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 

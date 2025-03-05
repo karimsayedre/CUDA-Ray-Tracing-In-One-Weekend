@@ -22,7 +22,7 @@ __host__ void check_cuda(cudaError_t result, char const* const func, const char*
 
 //__device__ vec3 unit_vector(const vec3& v);
 
-__device__ vec3 color(const Ray& r);
+__device__ glm::vec3 color(const Ray& r);
 
 class CudaRenderer
 {
@@ -40,17 +40,18 @@ class CudaRenderer
 
   private:
 	Hittable*  d_list;
+	Material*  d_materials;
 	Hittable** d_world;
 	Camera*	   d_camera;
 
-	uint32_t* d_rand_seeds;
+	uint32_t*	 d_rand_seeds;
 	curandState* d_rand_state2;
 
   private:
-	uint32_t m_Width;
-	uint32_t m_Height;
-	uint32_t m_SamplesPerPixel;
-	uint32_t m_MaxDepth;
-	float	 m_ColorMul;
-	vec3*	 d_Image;
+	uint32_t   m_Width;
+	uint32_t   m_Height;
+	uint32_t   m_SamplesPerPixel;
+	uint32_t   m_MaxDepth;
+	float	   m_ColorMul;
+	glm::vec3* d_Image;
 };

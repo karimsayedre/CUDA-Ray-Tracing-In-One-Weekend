@@ -105,48 +105,70 @@ class BVHNode : public Hittable
 		delete[] objects;
 	}
 
-__device__ __noinline__ bool Hit(const Ray& r, const Float tMin, Float tMax, HitRecord& rec) const override
+	// Helper to process a leaf node hit.
+	__device__ __forceinline__ static bool processLeafNode(
+		Hittable* __restrict__ node,
+		const Ray&	r,
+		const Float tMin,
+		Float&		tMax,
+		HitRecord&	rec)
 	{
-		Hittable* __restrict__ stack[10]; // Fixed-size traversal stack
-		unsigned char stack_ptr		 = 0; // Use an 8-bit integer since depth <= 10
-		bool		  hit_anything	 = false;
-		Float		  closest_so_far = tMax; // Local variable for the closest hit
+		HitRecord temp_rec;
+		if (node->Hit(r, tMin, tMax, temp_rec))
+		{
+			tMax = temp_rec.T;
+			rec	 = temp_rec;
+			return true;
+		}
+		return false;
+	}
 
-		// Push root children (right first, then left so left is processed first)
+	// Helper to push the children of an internal node.
+	__device__ __forceinline__ static void processInternalNode(
+		BVHNode* bvh_node,
+		Hittable* __restrict__ stack[],
+		int& stack_ptr)
+	{
+		// Push right first, then left (so left is processed next)
+		stack[stack_ptr++] = bvh_node->m_Right;
+		stack[stack_ptr++] = bvh_node->m_Left;
+	}
+
+	__device__ __noinline__ bool Hit(
+		const Ray&	r,
+		const Float tMin,
+		Float		tMax,
+		HitRecord&	rec) const override
+	{
+		Hittable* __restrict__ stack[10];
+		int	 stack_ptr	  = 0;
+		bool hit_anything = false;
+
+		// Push root children (right first, then left)
 		stack[stack_ptr++] = m_Right;
 		stack[stack_ptr++] = m_Left;
-
-		HitRecord temp_rec; // Declare once outside the loop to reuse the register(s)
 
 		while (stack_ptr > 0)
 		{
 			Hittable* node = stack[--stack_ptr];
 
-			// Early out: Skip nodes whose AABB doesn't intersect [tMin, closest_so_far]
+			// Early out if bounding box doesn't hit.
 			const AABB& box = node->GetBoundingBox(0.0, 1.0);
-			if (!box.Hit(r, {tMin, closest_so_far}))
+			if (!box.Hit(r, {tMin, tMax}))
 				continue;
 
 			if (node->IsLeaf())
 			{
-				if (node->Hit(r, tMin, closest_so_far, temp_rec))
-				{
-					hit_anything   = true;
-					closest_so_far = temp_rec.T;
-					rec			   = temp_rec;
-				}
+				if (processLeafNode(node, r, tMin, tMax, rec))
+					hit_anything = true;
 			}
 			else
 			{
-				BVHNode* bvh_node = static_cast<BVHNode*>(node);
-				// Push children without sorting; order remains consistent.
-				stack[stack_ptr++] = bvh_node->m_Right;
-				stack[stack_ptr++] = bvh_node->m_Left;
+				processInternalNode(static_cast<BVHNode*>(node), stack, stack_ptr);
 			}
 		}
 		return hit_anything;
 	}
-
 
 	__device__ const AABB& GetBoundingBox(double time0, double time1) const override
 	{

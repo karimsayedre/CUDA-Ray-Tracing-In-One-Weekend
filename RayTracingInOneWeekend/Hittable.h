@@ -11,10 +11,10 @@ class Material;
 
 struct HitRecord
 {
-	vec3			Location;
-	vec3			Normal;
-	Float			T;
-	const Material* MaterialPtr;
+	glm::vec3       Location;
+	Float           T;
+	glm::vec3       Normal;
+	uint16_t MaterialIndex;
 	//bool			FrontFace;
 	//__device__ void SetFaceNormal(const Ray& ray, const vec3& outwardNormal)
 	//{

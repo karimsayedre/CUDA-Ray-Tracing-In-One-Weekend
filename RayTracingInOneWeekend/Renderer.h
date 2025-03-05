@@ -82,7 +82,7 @@ public:
 	//		}
 
 	//		Ray scattered;
-	//		if (hitRecord.MaterialPtr->Scatter(ray, hitRecord, attenuation, scattered, local_rand_state))
+	//		if (hitRecord.MaterialIndex->Scatter(ray, hitRecord, attenuation, scattered, local_rand_state))
 	//		{
 	//			color *= attenuation;
 	//			ray = scattered;

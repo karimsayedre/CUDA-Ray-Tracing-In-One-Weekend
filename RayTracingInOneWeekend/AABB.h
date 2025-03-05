@@ -32,7 +32,7 @@ class AABB
 	{
 	}
 
-	__device__ AABB(const vec3& a, const vec3& b)
+	__device__ AABB(const glm::vec3& a, const glm::vec3& b)
 	{
 		// Treat the two points a and b as extrema for the bounding box, so we don't require a
 		// particular minimum/maximum coordinate order.
@@ -95,7 +95,7 @@ class AABB
 	__device__ Float DistanceToRayOrigin(const Ray& r) const
 	{
 		// Compute the vector from ray origin to box center
-		vec3 diff = vec3(x.Center(), y.Center(), z.Center()) - r.Origin();
+		glm::vec3 diff = glm::vec3(x.Center(), y.Center(), z.Center()) - r.Origin();
 
 		// Return squared Euclidean distance (cheaper than sqrt)
 		return dot(diff, diff);
@@ -112,12 +112,12 @@ class AABB
 	}
 };
 
-__device__ inline AABB operator+(const AABB& bbox, const vec3& offset)
+__device__ inline AABB operator+(const AABB& bbox, const glm::vec3& offset)
 {
-	return {bbox.x + offset.x(), bbox.y + offset.y(), bbox.z + offset.z()};
+	return {bbox.x + offset.x, bbox.y + offset.y, bbox.z + offset.z};
 }
 
-__device__ inline AABB operator+(const vec3& offset, const AABB& bbox)
+__device__ inline AABB operator+(const glm::vec3& offset, const AABB& bbox)
 {
 	return bbox + offset;
 }

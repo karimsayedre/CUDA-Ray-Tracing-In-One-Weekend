@@ -54,12 +54,12 @@ __device__ inline float RandomFloat(uint32_t& seed)
 //	return static_cast<int>(RandomFloat(seed, (float)min, (float)max + 1.0f));
 //}
 
-__device__ inline vec3 RandomVec3(uint32_t& seed, const float min, const float max)
+__device__ inline glm::vec3 RandomVec3(uint32_t& seed, const float min, const float max)
 {
 	return {RandomFloat(seed, min, max), RandomFloat(seed, min, max), RandomFloat(seed, min, max)};
 }
 
-__device__ inline vec3 RandomVec3(uint32_t& seed)
+__device__ inline glm::vec3 RandomVec3(uint32_t& seed)
 {
 	return {RandomFloat(seed), RandomFloat(seed), RandomFloat(seed)};
 }
@@ -69,7 +69,7 @@ __device__ inline vec3 RandomVec3(uint32_t& seed)
 //	return (RandomVec3(seed).make_unit_vector());
 //}
 
-__device__ __forceinline__ vec3 randomUnitVector(uint32_t& randSeed)
+__device__ __forceinline__ glm::vec3 randomUnitVector(uint32_t& randSeed)
 {
 	// Generate a random direction uniformly on the unit sphere
 	// (One possible approach: spherical coordinates)
@@ -81,4 +81,18 @@ __device__ __forceinline__ vec3 randomUnitVector(uint32_t& randSeed)
 	float r   = sqrtf(1.f - z * z); // Radius in xy-plane
 
 	return {r * cosf(phi), r * sinf(phi), z};
+}
+
+// Additional Optimization: Faster Random Generation
+__device__ inline glm::vec3 RandomUnitVec3(uint32_t& seed)
+{
+	// Use faster, more uniform distribution
+	float z	  = 2.0f * RandomFloat(seed) - 1.0f;
+	float r	  = sqrtf(1.0f - z * z);
+	float phi = 2.0f * 3.14159f * RandomFloat(seed);
+
+	return glm::vec3(
+		r * cosf(phi),
+		r * sinf(phi),
+		z);
 }
