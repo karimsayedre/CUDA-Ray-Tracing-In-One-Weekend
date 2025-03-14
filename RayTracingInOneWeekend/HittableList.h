@@ -1,14 +1,15 @@
 #pragma once
 
 #include "Hittable.h"
-#include <algorithm> // Add this include for std::min and std::max
-#include "AABB.h"
-#include <math.h>
+#include "Sphere.h"
+
+struct HitRecord;
+
 class HittableList : public Hittable
 {
   public:
 	__device__ HittableList(Hittable** objects, uint32_t count)
-		: m_Objects(objects), m_Count(count)
+		: Hittable(this), m_Objects(objects), m_Count(count)
 	{
 		// Add(object);
 		for (uint32_t i = 0; i < count; i++)
@@ -18,12 +19,8 @@ class HittableList : public Hittable
 		}
 	}
 
-	__device__ const AABB& GetBoundingBox(double time0, double time1) const override
-	{
-		return m_BoundingBox;
-	}
 
-	__device__ __noinline__ bool Hit(const Ray& ray, const Float tMin, Float tMax, HitRecord& record) const override
+	__device__ bool Hit(const Ray& ray, const Float tMin, Float tMax, HitRecord& record) const override
 	{
 		HitRecord tempRecord;
 		bool	  hitAnything  = false;
@@ -31,7 +28,7 @@ class HittableList : public Hittable
 
 		for (uint32_t i = 0; i < m_Count; i++)
 		{
-			if (m_Objects[i]->Hit(ray, tMin, tMax, tempRecord))
+			if ((Sphere*)m_Objects[i]->Hit(ray, tMin, tMax, tempRecord))
 			{
 				hitAnything	 = true;
 				tMax		= tempRecord.T;
@@ -41,16 +38,10 @@ class HittableList : public Hittable
 		return hitAnything;
 	}
 
-	__device__ [[nodiscard]] bool IsLeaf() const override
-	{
-		return false;
-	}
-
   //private:
 
 	Hittable** m_Objects;
 	uint32_t   m_Count;
-	AABB	   m_BoundingBox;
 };
 
 //__device__ inline AABB SurroundingBox(const AABB& box0, const AABB& box1)

@@ -8,7 +8,6 @@
 #include <SFML/Graphics/Image.hpp>
 
 #include "Hittable.h"
-#include "Material.h"
 
 #define CHECK_CUDA_ERRORS(val) check_cuda((val), #val, __FILE__, __LINE__)
 
@@ -38,9 +37,10 @@ class CudaRenderer
 	__host__ void Render() const;
 	__host__ std::vector<float> CopyImage();
 
+	__host__ ~CudaRenderer();
   private:
 	Hittable*  d_list;
-	Material*  d_materials;
+	//Material*  d_materials;
 	Hittable** d_world;
 	Camera*	   d_camera;
 

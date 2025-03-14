@@ -69,7 +69,7 @@ __device__ inline glm::vec3 RandomVec3(uint32_t& seed)
 //	return (RandomVec3(seed).make_unit_vector());
 //}
 
-__device__ __forceinline__ glm::vec3 randomUnitVector(uint32_t& randSeed)
+__device__ inline glm::vec3 randomUnitVector(uint32_t& randSeed)
 {
 	// Generate a random direction uniformly on the unit sphere
 	// (One possible approach: spherical coordinates)

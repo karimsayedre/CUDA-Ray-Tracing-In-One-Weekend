@@ -24,7 +24,7 @@ class Interval
 	{
 	}
 
-	__device__ [[nodiscard]] double size() const
+	__device__ [[nodiscard]] Float size() const
 	{
 		return max - min;
 	}

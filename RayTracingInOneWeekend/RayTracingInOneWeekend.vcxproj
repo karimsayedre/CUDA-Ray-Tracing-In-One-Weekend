@@ -97,11 +97,12 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <AdditionalCompilerOptions>
       </AdditionalCompilerOptions>
-      <Defines>__CUDACC_VER_MAJOR__=12;GLM_FORCE_CUDA;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT</Defines>
+      <Defines>__CUDACC_VER_MAJOR__=12;GLM_FORCE_CUDA;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT;GLM_FORCE_SWIZZLE_XYZW</Defines>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
-      <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr</AdditionalOptions>
+      <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr -Xptxas=-v</AdditionalOptions>
       <PtxAsOptionV>false</PtxAsOptionV>
-      <GenerateRelocatableDeviceCode>false</GenerateRelocatableDeviceCode>
+      <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
+      <MaxRegCount>64</MaxRegCount>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -131,9 +132,9 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <AdditionalCompilerOptions>
       </AdditionalCompilerOptions>
-      <Defines>__CUDACC_VER_MAJOR__=12;GLM_FORCE_CUDA;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT</Defines>
+      <Defines>__CUDACC_VER_MAJOR__=12;GLM_FORCE_CUDA;GLM_ENABLE_EXPERIMENTAL;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT;GLM_FORCE_SWIZZLE_XYZW</Defines>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
-      <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr -maxrregcount=0 -Xptxas=-v</AdditionalOptions>
+      <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr -Xptxas=-v</AdditionalOptions>
       <PtxAsOptionV>false</PtxAsOptionV>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
       <FastMath>true</FastMath>
@@ -143,6 +144,8 @@
       <RuntimeChecks>Default</RuntimeChecks>
       <TypeInfo>false</TypeInfo>
       <Warning>W3</Warning>
+      <GPUDebugInfo>false</GPUDebugInfo>
+      <MaxRegCount>64</MaxRegCount>
     </CudaCompile>
     <CudaLink>
       <PerformDeviceLinkTimeOptimization>true</PerformDeviceLinkTimeOptimization>
@@ -163,24 +166,32 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <CudaCompile>
-      <GenerateRelocatableDeviceCode>false</GenerateRelocatableDeviceCode>
+      <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
       <GPUDebugInfo>true</GPUDebugInfo>
-      <Defines>__CUDACC_VER_MAJOR__=12;GLM_FORCE_CUDA;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT</Defines>
+      <Defines>GLM_FORCE_CXX20;__CUDACC_VER_MAJOR__=12;GLM_FORCE_CUDA;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT;GLM_FORCE_XYZW_ONLY</Defines>
       <HostDebugInfo>true</HostDebugInfo>
-      <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 %(AdditionalOptions) --expt-relaxed-constexpr</AdditionalOptions>
+      <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr -Xptxas=-v</AdditionalOptions>
       <InterleaveSourceInPTX>true</InterleaveSourceInPTX>
+      <MaxRegCount>64</MaxRegCount>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <CudaCompile Include="Hittable.cu">
+      <FileType>Document</FileType>
+    </CudaCompile>
     <ClCompile Include="Log.cpp" />
     <ClCompile Include="Metal.cpp" />
     <ClCompile Include="Ray.cpp" />
     <ClCompile Include="Renderer.cpp" />
-    <ClCompile Include="Sphere.cpp" />
+    <CudaCompile Include="HittableList.cu" />
+    <CudaCompile Include="Sphere.cu">
+      <FileType>Document</FileType>
+    </CudaCompile>
     <ClCompile Include="Vec3.cpp" />
     <ClInclude Include="AABB.h" />
     <ClInclude Include="BVH.h" />
+    <ClInclude Include="BVHPool.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="CudaCamera.cuh" />
     <ClInclude Include="CudaMath.cuh" />
@@ -203,6 +214,8 @@
     <ClInclude Include="Viewer.h" />
   </ItemGroup>
   <ItemGroup>
+    <CudaCompile Include="BVH.cu" />
+    <CudaCompile Include="BVHPool.cu" />
     <CudaCompile Include="CUDARender.cu">
       <FileType>Document</FileType>
     </CudaCompile>

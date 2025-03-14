@@ -20,7 +20,7 @@
 //	return a > b ? a : b;
 //}
 
-class AABB
+class alignas(32) AABB
 {
   public:
 	Interval x, y, z;
@@ -68,28 +68,32 @@ class AABB
 		return x;
 	}
 
+	__device__ [[nodiscard]] float SurfaceArea() const
+	{
+		const float dx = x.size();
+		const float dy = y.size();
+		const float dz = z.size();
+		return 2.0f * (dx * dy + dx * dz + dy * dz);
+	}
+
+	__device__ [[nodiscard]] glm::vec3 Center() const
+	{
+		return {x.Center(), y.Center(), z.Center()};
+	}
+
 	__device__ [[nodiscard]] bool Hit(const Ray& r, Interval rayT) const
 	{
-		for (int a = 0; a < 3; a++)
-		{
-			auto invD = 1.0f / r.Direction()[a];
-			auto orig = r.Origin()[a];
+		glm::vec3 inv_dir = 1.0f / r.Direction();
+		glm::vec3 t0	  = (glm::vec3(x.min, y.min, z.min) - r.Origin()) * inv_dir;
+		glm::vec3 t1	  = (glm::vec3(x.max, y.max, z.max) - r.Origin()) * inv_dir;
 
-			auto t0 = (axis(a).min - orig) * invD;
-			auto t1 = (axis(a).max - orig) * invD;
+		glm::vec3 t_min = glm::min(t0, t1);
+		glm::vec3 t_max = glm::max(t0, t1);
 
-			if (invD < 0)
-				std::swap(t0, t1);
+		float t_enter = fmax(fmax(t_min.x, t_min.y), t_min.z);
+		float t_exit  = fmin(fmin(t_max.x, t_max.y), t_max.z);
 
-			if (t0 > rayT.min)
-				rayT.min = t0;
-			if (t1 < rayT.max)
-				rayT.max = t1;
-
-			if (rayT.max <= rayT.min)
-				return false;
-		}
-		return true;
+		return (t_exit > t_enter) && (t_enter < rayT.max) && (t_exit > rayT.min);
 	}
 
 	__device__ Float DistanceToRayOrigin(const Ray& r) const

@@ -8,118 +8,169 @@ enum class MaterialType
 {
 	Lambert,
 	Metal,
-	Dielectric,
+	Dielectric
+};
+
+namespace MaterialSoA
+{
+	// namespace MaterialSoA
+	extern __device__ glm::vec3* Albedo;
+	extern __device__ float*		Fuzz;
+	extern __device__ float*		Ior;
+	extern __device__ uint32_t*	MaterialFlagsX;
+	extern __device__ uint32_t*	MaterialFlagsY;
+	extern __device__ uint32_t*	MaterialFlagsZ;
+
+	__host__ inline static void Init(uint32_t maxMaterialCount)
+	{
+		// Allocate device memory
+		glm::vec3* d_albedo;
+		float*	   d_fuzz;
+		float*	   d_ior;
+		uint32_t*  d_flagsX;
+		uint32_t*  d_flagsY;
+		uint32_t*  d_flagsZ;
+
+		CHECK_CUDA_ERRORS(cudaMalloc(&d_albedo, maxMaterialCount * sizeof(glm::vec3)));
+		CHECK_CUDA_ERRORS(cudaMalloc(&d_fuzz, maxMaterialCount * sizeof(float)));
+		CHECK_CUDA_ERRORS(cudaMalloc(&d_ior, maxMaterialCount * sizeof(float)));
+		CHECK_CUDA_ERRORS(cudaMalloc(&d_flagsX, maxMaterialCount * sizeof(uint32_t)));
+		CHECK_CUDA_ERRORS(cudaMalloc(&d_flagsY, maxMaterialCount * sizeof(uint32_t)));
+		CHECK_CUDA_ERRORS(cudaMalloc(&d_flagsZ, maxMaterialCount * sizeof(uint32_t)));
+
+		// Copy device pointers to __device__ variables
+		CHECK_CUDA_ERRORS(cudaMemcpyToSymbol(MaterialSoA::Albedo, &d_albedo, sizeof(glm::vec3*)));
+		CHECK_CUDA_ERRORS(cudaMemcpyToSymbol(MaterialSoA::Fuzz, &d_fuzz, sizeof(float*)));
+		CHECK_CUDA_ERRORS(cudaMemcpyToSymbol(MaterialSoA::Ior, &d_ior, sizeof(float*)));
+		CHECK_CUDA_ERRORS(cudaMemcpyToSymbol(MaterialSoA::MaterialFlagsX, &d_flagsX, sizeof(uint32_t*)));
+		CHECK_CUDA_ERRORS(cudaMemcpyToSymbol(MaterialSoA::MaterialFlagsY, &d_flagsY, sizeof(uint32_t*)));
+		CHECK_CUDA_ERRORS(cudaMemcpyToSymbol(MaterialSoA::MaterialFlagsZ, &d_flagsZ, sizeof(uint32_t*)));
+	}
+} // namespace MaterialSoA
+
+struct Materials
+{
+	__device__ static void Add(
+		MaterialType	 type,
+		const glm::vec3& albedo,
+		float			 fuzz  = 0.0f,
+		float			 ior   = 1.0f,
+		int				 index = -1)
+	{
+		if (index == -1)
+			return; // Safety check
+		MaterialSoA::Albedo[index] = albedo;
+		MaterialSoA::Fuzz[index] = fuzz;
+		MaterialSoA::Ior[index]	 = ior;
+
+		// Set material flags based on type
+		switch (type)
+		{
+			case MaterialType::Lambert:
+				MaterialSoA::MaterialFlagsX[index] = 1;
+				MaterialSoA::MaterialFlagsY[index] = 0;
+				MaterialSoA::MaterialFlagsZ[index] = 0;
+				break;
+			case MaterialType::Metal:
+				MaterialSoA::MaterialFlagsX[index] = 0;
+				MaterialSoA::MaterialFlagsY[index] = 1;
+				MaterialSoA::MaterialFlagsZ[index] = 0;
+				break;
+			case MaterialType::Dielectric:
+				MaterialSoA::MaterialFlagsX[index] = 0;
+				MaterialSoA::MaterialFlagsY[index] = 0;
+				MaterialSoA::MaterialFlagsZ[index] = 1;
+				break;
+		}
+	}
+
+	static void Init(uint32_t maxMaterialCount);
 };
 
 class Material
 {
-	MaterialType m_Type;
-
-	// union
-	//{
-	// struct
-	//{
-	glm::vec3 m_Albedo;
-	float	  m_Fuzz;
-	//};
-
-	float m_IOR;
-	//};
-
-  protected:
-	/*union
-	{
-		u_Lambert*	u_Lambert;
-		u_Dielectric* u_Dielectric;
-		u_Metal*		u_Metal;
-	};*/
+	//inline static MaterialSoA m_MaterialSoA;
 
   public:
-	//__device__ Material(Material* mat)
+	//__device__ inline static void Add(MaterialType	 type,
+	//                           const glm::vec3& albedo,
+	//                           float			 fuzz  = 0.0f,
+	//                           float			 ior   = 1.0f,
+	//                           int				 index = -1)
 	//{
+	//	m_MaterialSoA.Add(type, albedo, fuzz, ior, index);
 	//}
-
-	__device__ Material(MaterialType type, const glm::vec3& albedo, float fuzz = 0.0f, float ior = 1.0f)
-		: m_Type(type), m_Albedo(albedo), m_Fuzz(fuzz), m_IOR(ior)
-	{
-	}
-
-  public:
-	__device__ bool Scatter(Ray& incomingRay, Ray& scatteredRay, const HitRecord& rec, glm::vec3& attenuation, uint32_t& randSeed) const;
+	__device__ static bool Scatter(Ray& incomingRay, Ray& scatteredRay, const HitRecord& rec, glm::vec3& attenuation, uint32_t& randSeed, uint32_t materialIndex);
 };
 
-// Optimized Material Scatter Method
-__device__ inline bool Material::Scatter(Ray& incomingRay, Ray& scatteredRay, const HitRecord& rec, glm::vec3& attenuation, uint32_t& randSeed) const
+
+__device__ inline bool Material::Scatter(Ray& incomingRay, Ray& scatteredRay, const HitRecord& rec, glm::vec3& attenuation, uint32_t& randSeed, uint32_t materialIndex)
 {
-	// Use faster approximations and reduce branches
-	const glm::vec3 rayDir	  = incomingRay.Direction();
-	const float		rayDirLen = fastLength(rayDir);
-	const glm::vec3 unitDir	  = (rayDirLen > 0.f) ? (rayDir / rayDirLen) : rayDir;
+	// Normalize direction (branchless)
+	const glm::vec3 rayDir		   = incomingRay.Direction();
+	const float		rayDirLen	   = fastLength(rayDir);
+	const float		rayDirLenRecip = rayDirLen > 0.0001f ? 1.0f / rayDirLen : 1.0f;
+	const glm::vec3 unitDir		   = rayDir * rayDirLenRecip;
 
-	switch (m_Type)
-	{
-		case MaterialType::Lambert:
-		{
-			// Optimize random vector generation
-			glm::vec3 scatterDir = rec.Normal + RandomVec3(randSeed);
+	// Normal based on surface face
+	const float		dotRayNormal  = dot(unitDir, rec.Normal);
+	const bool		frontFace	  = dotRayNormal < 0.0f;
+	const glm::vec3 outwardNormal = frontFace ? rec.Normal : -rec.Normal;
 
-			// Prevent degenerate scatter directions
-			scatterDir = glm::length(scatterDir) > 0.001f
-							 ? glm::normalize(scatterDir)
-							 : rec.Normal;
+	// Calculate scattered directions for all types
+	const glm::vec3 randomVec = RandomVec3(randSeed);
 
-			scatteredRay = Ray(rec.Location, scatterDir);
-			attenuation *= m_Albedo;
-			return true;
-		}
+	// Lambert scattering direction
+	glm::vec3	lambertDir	  = rec.Normal + randomVec;
+	const float lambertDirLen = glm::length(lambertDir);
+	lambertDir				  = lambertDirLen > 0.001f ? lambertDir / lambertDirLen : rec.Normal;
 
-		case MaterialType::Metal:
-		{
-			// Combine reflection and fuzz in one step
-			glm::vec3 reflected = reflect(unitDir, rec.Normal);
-			glm::vec3 fuzzDir	= RandomVec3(randSeed) * m_Fuzz;
+	// Metal reflection direction
+	const glm::vec3 reflected = reflect(unitDir, rec.Normal);
+	const glm::vec3 metalDir  = reflected + randomVec * MaterialSoA::Fuzz[materialIndex];
 
-			scatteredRay = Ray(rec.Location, reflected + fuzzDir);
-			attenuation *= m_Albedo;
+	// Dielectric refraction/reflection
+	float		ior		 = MaterialSoA::Ior[materialIndex];
+	const float niOverNt = frontFace ? (1.0f / ior) : ior;
+	const float cosine	 = frontFace ? -dotRayNormal : dotRayNormal;
 
-			return dot(scatteredRay.Direction(), rec.Normal) > 0.0f;
-		}
+	glm::vec3		refracted;
+	const bool		canRefract	  = refract(unitDir, outwardNormal, niOverNt, refracted);
+	const float		reflectProb	  = canRefract ? Reflectance(cosine, ior) : 1.0f;
+	const float		randVal		  = RandomFloat(randSeed);
+	const glm::vec3 dielectricDir = (randVal < reflectProb) ? reflect(unitDir, outwardNormal) : refracted;
 
-		case MaterialType::Dielectric:
-		{
-			// Reduce repeated calculations
-			const float dotRayNormal = dot(unitDir, rec.Normal);
-			const bool	frontFace	 = (dotRayNormal < 0.f);
+	// Selection of direction based on material parameters (branchless)
+	// m_MaterialFlags: [0] = Lambert component, [1] = Metal component, [2] = Dielectric component
+	// Values between 0 and 1 allow for blended materials
+	const float lambertWeight	 = (float)MaterialSoA::MaterialFlagsX[materialIndex];
+	const float metalWeight		 = (float)MaterialSoA::MaterialFlagsY[materialIndex];
+	const float dielectricWeight = (float)MaterialSoA::MaterialFlagsZ[materialIndex];
 
-			const glm::vec3 outwardNormal = frontFace ? rec.Normal : -rec.Normal;
-			const float		niOverNt	  = frontFace ? (1.f / m_IOR) : m_IOR;
-			const float		cosine		  = frontFace ? -dotRayNormal : dotRayNormal;
+	// Normalize weights to sum to 1.0
+	const float totalWeight		 = lambertWeight + metalWeight + dielectricWeight;
+	const float weightNormalizer = totalWeight > 0.0001f ? 1.0f / totalWeight : 0.0f;
 
-			glm::vec3 refracted;
-			float	  reflectProb;
+	const float normLambertWeight	 = lambertWeight * weightNormalizer;
+	const float normMetalWeight		 = metalWeight * weightNormalizer;
+	const float normDielectricWeight = dielectricWeight * weightNormalizer;
 
-			// Combine refraction and reflection checks
-			if (refract(unitDir, outwardNormal, niOverNt, refracted))
-			{
-				reflectProb = Reflectance(cosine, m_IOR);
-			}
-			else
-			{
-				reflectProb = 1.0f;
-				// Force reflection if total internal reflection
-				scatteredRay = Ray(rec.Location, reflect(unitDir, outwardNormal));
-				return true;
-			}
+	// Blend directions
+	glm::vec3 finalDir =
+		lambertDir * normLambertWeight + metalDir * normMetalWeight + dielectricDir * normDielectricWeight;
 
-			// Simplified probabilistic scattering
-			scatteredRay = (RandomFloat(randSeed) < reflectProb)
-							   ? Ray(rec.Location, reflect(unitDir, outwardNormal))
-							   : Ray(rec.Location, refracted);
+	// Ensure direction is normalized
+	finalDir = glm::normalize(finalDir);
 
-			return true;
-		}
+	// Calculate if scattering is valid (mainly for metal)
+	const float scatterDot	 = dot(finalDir, rec.Normal);
+	const bool	validScatter = (scatterDot > 0.0f) || (dielectricWeight > 0.0f);
 
-		default:
-			return false;
-	}
+	// Apply attenuation based on material properties
+	attenuation *= MaterialSoA::Albedo[materialIndex];
+
+	// Set scattered ray
+	scatteredRay = Ray(rec.Location, finalDir);
+
+	return validScatter;
 }

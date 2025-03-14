@@ -278,12 +278,12 @@ __device__ inline glm::vec3 unit_vector(const glm::vec3& v)
 	return {v.x * invLen, v.y * invLen, v.z * invLen};
 }
 
-__device__ __forceinline__ glm::vec3 reflect(const glm::vec3& v, const glm::vec3& n)
+__device__ inline glm::vec3 reflect(const glm::vec3& v, const glm::vec3& n)
 {
 	return v - 2.f * glm::dot(v, n) * n;
 }
 
-__device__ __forceinline__ bool refract(const glm::vec3& v, const glm::vec3& n, float niOverNt, glm::vec3& outRefracted)
+__device__ inline bool refract(const glm::vec3& v, const glm::vec3& n, float niOverNt, glm::vec3& outRefracted)
 {
 	float dt		   = dot(v, n);
 	float discriminant = 1.f - niOverNt * niOverNt * (1.f - dt * dt);
@@ -295,14 +295,14 @@ __device__ __forceinline__ bool refract(const glm::vec3& v, const glm::vec3& n, 
 	return false;
 }
 
-__device__ __forceinline__ float Reflectance(float cosine, float refIdx)
+__device__ inline float Reflectance(float cosine, float refIdx)
 {
 	// Schlick's approximation
 	float r0 = (1.f - refIdx) / (1.f + refIdx);
 	r0		 = r0 * r0;
 	return r0 + (1.f - r0) * powf((1.f - cosine), 5.f);
 }
-__device__ __forceinline__ float fastLength(const glm::vec3& v)
+__device__ inline float fastLength(const glm::vec3& v)
 {
 	// Approximate length using rsqrtf
 	float lenSq = dot(v, v);
