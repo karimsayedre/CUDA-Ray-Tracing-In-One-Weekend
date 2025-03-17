@@ -1,222 +1,138 @@
 #include "pch.cuh"
-
+#include <thrust/sort.h>
 #include "BVH.h"
 
-__device__ __noinline__ BVHNode::BVHNode(
-	Hittable**	 src_objects,
-	size_t		 start,
-	size_t		 end,
-	double		 time0,
-	double		 time1,
-	curandState* local_rand_state,
-	BVHPool*	 pool)
-	: Hittable(this)
+__device__ uint32_t BuildBVH_SoA(const HittableList* list, uint32_t* indices, uint32_t start, uint32_t end, BVHSoA* soa)
 {
-	BVHNode* node = pool->Allocate();
-	if (!node)
-	{
-		printf("ERROR: BVH pool exhausted!\n");
-		return; // Or handle this error appropriately
-	}
+	uint32_t object_span = end - start;
 
-	size_t object_span = end - start;
-
-	// Initialize the node's bounding box
+	// Compute bounding box for this node
 	AABB box;
-	for (size_t object_index = start; object_index < end; object_index++)
+	bool first_box = true;
+	for (uint32_t i = start; i < end; ++i)
 	{
-		box = AABB(box, src_objects[object_index]->GetBoundingBox(time0, time1));
+		uint32_t sphere_index = indices[i];
+		AABB	 current_box  = list->m_Objects[sphere_index].GetBoundingBox();
+		if (first_box)
+		{
+			box		  = current_box;
+			first_box = false;
+		}
+		else
+		{
+			box = AABB(box, current_box);
+		}
 	}
-	m_BoundingBox		  = box;
-	int		   axis		  = box.LongestAxis();
-	const auto comparator = (axis == 0)	  ? box_x_compare
-							: (axis == 1) ? box_y_compare
-										  : box_z_compare;
 
 	if (object_span == 1)
 	{
-		m_Left = m_Right = src_objects[start];
+		// Leaf node: store sphere index
+		return soa->AddNode(indices[start], UINT32_MAX, box, true);
 	}
-	else if (object_span == 2)
-	{
-		if (comparator(src_objects[start], src_objects[start + 1]))
-		{
-			m_Left	= src_objects[start];
-			m_Right = src_objects[start + 1];
-		}
-		else
-		{
-			m_Left	= src_objects[start + 1];
-			m_Right = src_objects[start];
-		}
-	}
-	else
-	{
-		// Create a temporary array for sorting
-		Hittable** objects = new Hittable*[object_span];
-		for (size_t i = 0; i < object_span; i++)
-		{
-			objects[i] = src_objects[start + i];
-		}
 
-		// Implement efficient partitioning (modified from your original code)
-		size_t mid = object_span / 2;
-		for (size_t i = 0; i < object_span; ++i)
+	if (object_span == 2)
+	{
+		uint32_t idx_a = indices[start];
+		uint32_t idx_b = indices[start + 1];
+
+		// Create leaf nodes for each sphere
+		AABB box_a = list->m_Objects[idx_a].GetBoundingBox();
+		AABB box_b = list->m_Objects[idx_b].GetBoundingBox();
+
+		uint32_t left_leaf	= soa->AddNode(idx_a, UINT32_MAX, box_a, true);
+		uint32_t right_leaf = soa->AddNode(idx_b, UINT32_MAX, box_b, true);
+
+		// Create parent internal node
+		AABB combined = AABB(box_a, box_b);
+		return soa->AddNode(left_leaf, right_leaf, combined, false);
+	}
+
+	// Sort indices based on bounding box centroids
+	int	 axis		= box.LongestAxis();
+	auto comparator = [&](uint32_t a, uint32_t b)
+	{
+		return list->m_Objects[a].GetBoundingBox().Center()[axis] < list->m_Objects[b].GetBoundingBox().Center()[axis];
+	};
+
+	// Sort the indices - THIS IS IMPORTANT!
+	// You need to implement this sorting, either using thrust::sort or another method
+	// For example, a simple bubble sort (not efficient, but for illustration):
+	for (uint32_t i = start; i < end; i++)
+	{
+		for (uint32_t j = start; j < end - 1; j++)
 		{
-			for (size_t j = i + 1; j < object_span; ++j)
+			if (comparator(indices[j + 1], indices[j]))
 			{
-				if (comparator(objects[j], objects[i]))
-				{
-					Hittable* temp = objects[i];
-					objects[i]	   = objects[j];
-					objects[j]	   = temp;
-				}
+				uint32_t temp  = indices[j];
+				indices[j]	   = indices[j + 1];
+				indices[j + 1] = temp;
 			}
-			if (i == mid)
-				break; // Early exit after partitioning around mid
 		}
-
-		// Recursively build left and right subtrees using the pool
-		m_Left	= new BVHNode(objects, 0, mid, time0, time1, local_rand_state, pool);
-		m_Right = new BVHNode(objects, mid, object_span, time0, time1, local_rand_state, pool);
-
-		// Free temporary array
-		delete[] objects;
 	}
 
-	// Node is initialized
+	// Recursively build children
+	uint32_t	   mid		 = start + object_span / 2;
+	const uint32_t left_idx	 = BuildBVH_SoA(list, indices, start, mid, soa);
+	const uint32_t right_idx = BuildBVH_SoA(list, indices, mid, end, soa);
+
+	// Create internal node
+	AABB combined = AABB(soa->m_bounds[left_idx], soa->m_bounds[right_idx]);
+	return soa->AddNode(left_idx, right_idx, combined, false);
 }
 
-__device__ __noinline__ void BVHNode::Initialize(Hittable** src_objects, size_t start, size_t end, double time0, double time1, curandState* local_rand_state, BVHPool* pool)
+__device__ bool TraverseBVH_SoA(const Ray& ray, float tmin, float tmax, HittableList* list, BVHSoA* soa, uint32_t root_index, HitRecord& best_hit)
 {
-	size_t object_span = end - start;
+	bool hit_anything = false;
 
-	// Allocate temporary device array
-	Hittable** objects = new Hittable*[object_span];
-
-	// Copy objects into the temporary array
-	for (size_t i = 0; i < object_span; i++)
+	// Push root node
+	struct StackEntry
 	{
-		objects[i] = src_objects[start + i];
-	}
+		uint32_t index;
+		float	 Tmin, Tmax;
+	};
 
-	// Build the bounding box as before
-	m_BoundingBox = {};
-	for (size_t object_index = 0; object_index < object_span; object_index++)
-		m_BoundingBox = AABB(m_BoundingBox, objects[object_index]->GetBoundingBox(0.0, 1.0));
-
-	int	 axis		= m_BoundingBox.LongestAxis();
-	auto comparator = (axis == 0)	? box_x_compare
-					  : (axis == 1) ? box_y_compare
-									: box_z_compare;
-
-	if (object_span == 1)
-	{
-		m_Left = m_Right = objects[0];
-	}
-	else if (object_span == 2)
-	{
-		if (comparator(objects[0], objects[1]))
-		{
-			m_Left	= objects[0];
-			m_Right = objects[1];
-		}
-		else
-		{
-			m_Left	= objects[1];
-			m_Right = objects[0];
-		}
-	}
-	else
-	{
-		// Use the same median algorithm
-		size_t mid = object_span / 2;
-		for (size_t i = 0; i < object_span; ++i)
-		{
-			for (size_t j = i + 1; j < object_span; ++j)
-			{
-				if (comparator(objects[j], objects[i]))
-				{
-					Hittable* temp = objects[i];
-					objects[i]	   = objects[j];
-					objects[j]	   = temp;
-				}
-			}
-			if (i == mid)
-				break;
-		}
-
-		// Allocate from pool instead of using new
-		BVHNode* left_node	= pool->Allocate();
-		BVHNode* right_node = pool->Allocate();
-
-		if (left_node && right_node)
-		{
-			left_node->Initialize(objects, 0, mid, time0, time1, local_rand_state, pool);
-			right_node->Initialize(objects, mid, object_span, time0, time1, local_rand_state, pool);
-			m_Left	= left_node;
-			m_Right = right_node;
-		}
-		else
-		{
-			// Handle pool exhaustion
-			// Could fall back to direct allocation or error
-		}
-	}
-
-	// Compute Bounding Box
-	AABB box_left  = m_Left->GetBoundingBox(time0, time1);
-	AABB box_right = m_Right->GetBoundingBox(time0, time1);
-	m_BoundingBox  = AABB(box_left, box_right);
-
-	// Free temporary array
-	delete[] objects;
-}
-
-__device__ bool BVHNode::processLeafNode(Hittable* node, const Ray& r, const Float tMin, Float& tMax, HitRecord& rec)
-{
-	HitRecord temp_rec;
-	if ((Sphere*)(node)->Hit(r, tMin, tMax, temp_rec))
-	{
-		tMax = temp_rec.T;
-		rec	 = temp_rec;
-		return true;
-	}
-	return false;
-}
-
-__device__ __noinline__ bool BVHNode::Hit(const Ray& r, const Float tMin, Float tMax, HitRecord& rec) const
-{
-	Hittable* stack[10];
-	int		  stack_ptr	   = 0;
-	bool	  hit_anything = false;
-
-	// Push root children (right first, then left)
-	stack[stack_ptr++] = m_Right;
-	stack[stack_ptr++] = m_Left;
-	//HitRecord rec;
+	StackEntry stack[10]; // Increased stack size for deeper trees
+	int		   stack_ptr = 0;
+	stack[stack_ptr++]	 = {root_index, tmin, tmax};
 
 	while (stack_ptr > 0)
 	{
-		Hittable* node = stack[--stack_ptr];
+		StackEntry entry = stack[--stack_ptr];
 
-		// Early out if bounding box doesn't hit.
-		const AABB& box = node->GetBoundingBox(0.0, 1.0);
-		if (!box.Hit(r, {tMin, tMax}))
+		// Test if the ray intersects this node's bounding box
+		const AABB& box = soa->m_bounds[entry.index];
+		if (!box.Hit(ray, {entry.Tmin, entry.Tmax}))
 			continue;
 
-		if (node->IsLeaf())
+		if (soa->m_is_leaf[entry.index])
 		{
-			if (processLeafNode(node, r, tMin, tMax, rec))
+			// It's a leaf node, test intersection with the sphere
+			HitRecord	  temp_rec;
+			uint32_t	  sphere_index = soa->m_left[entry.index]; // Sphere index stored in left child
+			const Sphere& sphere	   = list->m_Objects[sphere_index];
+
+			if (sphere.Hit(ray, entry.Tmin, entry.Tmax, temp_rec))
+			{
+				// We found a hit, update tmax and record
 				hit_anything = true;
+				entry.Tmax	 = temp_rec.T; // Update tmax for next intersections
+				best_hit	 = temp_rec;
+				tmax		 = temp_rec.T; // Update global tmax
+			}
 		}
 		else
 		{
-			// Push right first, then left (so left is processed next)
-			BVHNode* bvh_node  = static_cast<BVHNode*>(node);
-			stack[stack_ptr++] = bvh_node->m_Right;
-			stack[stack_ptr++] = bvh_node->m_Left;
+			// It's an internal node, push both children
+			// Push right child first, then left (so left is processed first)
+			uint32_t left_child	 = soa->m_left[entry.index];
+			uint32_t right_child = soa->m_right[entry.index];
+
+			// Push right first (will be processed second)
+			stack[stack_ptr++] = {right_child, entry.Tmin, entry.Tmax};
+			// Push left (will be processed first)
+			stack[stack_ptr++] = {left_child, entry.Tmin, entry.Tmax};
 		}
 	}
+
 	return hit_anything;
 }

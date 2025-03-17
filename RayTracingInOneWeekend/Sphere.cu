@@ -3,12 +3,12 @@
 #include "Sphere.h"
 
 __device__ Sphere::Sphere(const glm::vec3& center, Float radius, const uint16_t& materialIndex)
-	: Hittable(this,
-			   AABB {center - radius,
-					 center + radius}),
+	: 
 	  m_Center(center),
 	  m_Radius(radius),
-	  m_MaterialIndex(materialIndex)
+	  m_MaterialIndex(materialIndex),
+	  m_BoundingBox(center - radius,
+						  center + radius)
 {
 }
 

@@ -10,12 +10,12 @@
 //	a = _mm_blendv_ps(a, temp, condition);
 // }
 
-//__device__ inline float min(float a, float b)
+//__device__ inline float Min(float a, float b)
 //{
 //	return a < b ? a : b;
 //}
 //
-//__device__ inline float max(float a, float b)
+//__device__ inline float Max(float a, float b)
 //{
 //	return a > b ? a : b;
 //}
@@ -23,102 +23,111 @@
 class alignas(32) AABB
 {
   public:
-	Interval x, y, z;
+	glm::vec3 Min;
+	glm::vec3 Max;
 
 	AABB() = default; // The default AABB is empty, since Intervals are empty by default.
 
 	__device__ AABB(const Interval& ix, const Interval& iy, const Interval& iz)
-		: x(ix), y(iy), z(iz)
+		: Min(ix.min, iy.min, iz.min), Max(ix.max, iy.max, iz.max)
 	{
 	}
 
 	__device__ AABB(const glm::vec3& a, const glm::vec3& b)
+		: Min(glm::min(a.x, b.x), glm::min(a.y, b.y), glm::min(a.z, b.z)), Max(glm::max(a.x, b.x), glm::max(a.y, b.y), glm::max(a.z, b.z))
 	{
 		// Treat the two points a and b as extrema for the bounding box, so we don't require a
 		// particular minimum/maximum coordinate order.
-		x = Interval(fmin(a[0], b[0]), fmax(a[0], b[0]));
-		y = Interval(fmin(a[1], b[1]), fmax(a[1], b[1]));
-		z = Interval(fmin(a[2], b[2]), fmax(a[2], b[2]));
 	}
 
 	__device__ AABB(const AABB& box0, const AABB& box1)
+		: Min(glm::min(box0.Min, box1.Min)), Max(glm::max(box0.Max, box1.Max))
 	{
-		x = Interval(box0.x, box1.x);
-		y = Interval(box0.y, box1.y);
-		z = Interval(box0.z, box1.z);
+		// x = Interval(box0.x, box1.x);
+		// y = Interval(box0.y, box1.y);
+		// z = Interval(box0.z, box1.z);
 	}
 
-	__device__ [[nodiscard]] AABB Pad() const
-	{
-		// Return an AABB that has no side narrower than some delta, padding if necessary.
-		Float	 delta = 0.0001f;
-		Interval new_x = (x.size() >= delta) ? x : x.Expand(delta);
-		Interval new_y = (y.size() >= delta) ? y : y.Expand(delta);
-		Interval new_z = (z.size() >= delta) ? z : z.Expand(delta);
+	//__device__ [[nodiscard]] AABB Pad() const
+	//{
+	//	// Return an AABB that has no side narrower than some delta, padding if necessary.
+	//	Float	 delta = 0.0001f;
+	//	Interval new_x = (x.size() >= delta) ? x : x.Expand(delta);
+	//	Interval new_y = (y.size() >= delta) ? y : y.Expand(delta);
+	//	Interval new_z = (z.size() >= delta) ? z : z.Expand(delta);
 
-		return AABB(new_x, new_y, new_z);
-	}
+	//	return AABB(new_x, new_y, new_z);
+	//}
 
-	__device__ [[nodiscard]] const Interval& axis(int n) const
-	{
-		if (n == 1)
-			return y;
-		if (n == 2)
-			return z;
-		return x;
-	}
+	//__device__ [[nodiscard]] const Interval& axis(int n) const
+	//{
+	//	if (n == 1)
+	//		return y;
+	//	if (n == 2)
+	//		return z;
+	//	return x;
+	//}
 
-	__device__ [[nodiscard]] float SurfaceArea() const
-	{
-		const float dx = x.size();
-		const float dy = y.size();
-		const float dz = z.size();
-		return 2.0f * (dx * dy + dx * dz + dy * dz);
-	}
+	//__device__ [[nodiscard]] const glm::vec3 Min() const
+	//{
+	//	return {x.min, y.min, z.min};
+	//}
+
+	//	__device__ [[nodiscard]] const glm::vec3 Max() const
+	//{
+	//		return {x.max, y.max, z.max};
+	//}
+
+	//__device__ [[nodiscard]] float SurfaceArea() const
+	//{
+	//	const float dx = x.size();
+	//	const float dy = y.size();
+	//	const float dz = z.size();
+	//	return 2.0f * (dx * dy + dx * dz + dy * dz);
+	//}
 
 	__device__ [[nodiscard]] glm::vec3 Center() const
 	{
-		return {x.Center(), y.Center(), z.Center()};
+		return (Min + Max) * 0.5f;
 	}
 
 	__device__ [[nodiscard]] bool Hit(const Ray& r, Interval rayT) const
+
 	{
-		glm::vec3 inv_dir = 1.0f / r.Direction();
-		glm::vec3 t0	  = (glm::vec3(x.min, y.min, z.min) - r.Origin()) * inv_dir;
-		glm::vec3 t1	  = (glm::vec3(x.max, y.max, z.max) - r.Origin()) * inv_dir;
+		glm::vec3 inv_dir = r.InverseDirection();
+		glm::vec3 t0	  = (Min - r.Origin()) * inv_dir;
+		glm::vec3 t1	  = (Max - r.Origin()) * inv_dir;
 
-		glm::vec3 t_min = glm::min(t0, t1);
-		glm::vec3 t_max = glm::max(t0, t1);
+		glm::vec3 t_min	  = glm::min(t0, t1);
+		glm::vec3 t_max	  = glm::max(t0, t1);
 
-		float t_enter = fmax(fmax(t_min.x, t_min.y), t_min.z);
-		float t_exit  = fmin(fmin(t_max.x, t_max.y), t_max.z);
+		float	  t_enter = fmax(fmax(t_min.x, t_min.y), t_min.z);
+		float	  t_exit  = fmin(fmin(t_max.x, t_max.y), t_max.z);
 
 		return (t_exit > t_enter) && (t_enter < rayT.max) && (t_exit > rayT.min);
 	}
+	//__device__ Float DistanceToRayOrigin(const Ray& r) const
+	//{
+	//	// Compute the vector from ray origin to box center
+	//	glm::vec3 diff = glm::vec3(x.Center(), y.Center(), z.Center()) - r.Origin();
 
-	__device__ Float DistanceToRayOrigin(const Ray& r) const
-	{
-		// Compute the vector from ray origin to box center
-		glm::vec3 diff = glm::vec3(x.Center(), y.Center(), z.Center()) - r.Origin();
-
-		// Return squared Euclidean distance (cheaper than sqrt)
-		return dot(diff, diff);
-	}
+	//	// Return squared Euclidean distance (cheaper than sqrt)
+	//	return dot(diff, diff);
+	//}
 
 	__device__ [[nodiscard]] int LongestAxis() const
 	{
 		// Returns the index of the longest axis of the bounding box.
-
-		if (x.size() > y.size())
-			return x.size() > z.size() ? 0 : 2;
+		if (Max.x - Min.x > Max.y - Min.y)
+			return Max.x - Min.x > Max.z - Min.z ? 0 : 2;
 		else
-			return y.size() > z.size() ? 1 : 2;
+			return Max.y - Min.y > Max.z - Min.z ? 1 : 2;
 	}
 };
 
 __device__ inline AABB operator+(const AABB& bbox, const glm::vec3& offset)
 {
-	return {bbox.x + offset.x, bbox.y + offset.y, bbox.z + offset.z};
+	return {bbox.Min + offset, bbox.Max + offset};
 }
 
 __device__ inline AABB operator+(const glm::vec3& offset, const AABB& bbox)
@@ -138,8 +147,8 @@ __device__ inline AABB operator+(const glm::vec3& offset, const AABB& bbox)
 //		return m_Maximum;
 //	}
 //
-//	__device__ AABB(const vec3& min, const vec3& max)
-//		: m_Minimum(min), m_Maximum(max)
+//	__device__ AABB(const vec3& Min, const vec3& Max)
+//		: m_Minimum(Min), m_Maximum(Max)
 //	{
 //	}
 //
@@ -169,25 +178,25 @@ __device__ inline AABB operator+(const glm::vec3& offset, const AABB& bbox)
 //		//	//const Interval& ax	  = axis_Interval(axis);
 //		//	const double	adinv = 1.0 / ray_dir[axis];
 //
-//		//	auto t0 = (ax.min - ray_orig[axis]) * adinv;
-//		//	auto t1 = (ax.max - ray_orig[axis]) * adinv;
+//		//	auto t0 = (ax.Min - ray_orig[axis]) * adinv;
+//		//	auto t1 = (ax.Max - ray_orig[axis]) * adinv;
 //
 //		//	if (t0 < t1)
 //		//	{
-//		//		if (t0 > ray_t.min)
-//		//			ray_t.min = t0;
-//		//		if (t1 < ray_t.max)
-//		//			ray_t.max = t1;
+//		//		if (t0 > ray_t.Min)
+//		//			ray_t.Min = t0;
+//		//		if (t1 < ray_t.Max)
+//		//			ray_t.Max = t1;
 //		//	}
 //		//	else
 //		//	{
-//		//		if (t1 > ray_t.min)
-//		//			ray_t.min = t1;
-//		//		if (t0 < ray_t.max)
-//		//			ray_t.max = t0;
+//		//		if (t1 > ray_t.Min)
+//		//			ray_t.Min = t1;
+//		//		if (t0 < ray_t.Max)
+//		//			ray_t.Max = t0;
 //		//	}
 //
-//		//	if (ray_t.max <= ray_t.min)
+//		//	if (ray_t.Max <= ray_t.Min)
 //		//		return false;
 //		//}
 //		// return true;

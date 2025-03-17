@@ -20,7 +20,7 @@ class Interval
 	}
 
 	__device__ Interval(const Interval& a, const Interval& b)
-		: min(std::min(a.min, b.min)), max(std::max(a.max, b.max))
+		: min(glm::min(a.min, b.min)), max(glm::max(a.max, b.max))
 	{
 	}
 

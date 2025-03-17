@@ -7,7 +7,7 @@ class Ray
   public:
 	Ray() noexcept = default;
 	[[nodiscard]] __device__ Ray(const glm::vec3& origin, const glm::vec3& direction) noexcept
-		: m_Origin(origin), m_Direction(direction)/*, m_InvDirection(1.0f / direction)*/
+		: m_Origin(origin), m_Direction(direction), m_InvDirection(1.0f / direction)
 	{
 	}
 
@@ -19,23 +19,19 @@ class Ray
 	{
 		return m_Direction;
 	}
-	//[[nodiscard]] __device__ glm::vec3 InvDirection() const noexcept
-	//{
-	//	return m_InvDirection;
-	//}
 
 	[[nodiscard]] __device__ glm::vec3 point_at_parameter(float t) const
 	{
 		return m_Origin + t * m_Direction;
 	}
 
-	[[nodiscard]] __device__ glm::vec3 At(const Float t) const noexcept
+	[[nodiscard]] __device__ glm::vec3 InverseDirection() const
 	{
-		return m_Origin + t * m_Direction;
+		return m_InvDirection;
 	}
 
-  private:
+private:
 	glm::vec3 m_Origin;
 	glm::vec3 m_Direction;
-	//vec3 m_InvDirection;
+	glm::vec3 m_InvDirection;
 };

@@ -97,7 +97,7 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <AdditionalCompilerOptions>
       </AdditionalCompilerOptions>
-      <Defines>__CUDACC_VER_MAJOR__=12;GLM_FORCE_CUDA;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT;GLM_FORCE_SWIZZLE_XYZW</Defines>
+      <Defines>__CUDACC_VER_MAJOR__=12;GLM_FORCE_CUDA;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT;GLM_FORCE_XYZW_ONLY</Defines>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
       <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr -Xptxas=-v</AdditionalOptions>
       <PtxAsOptionV>false</PtxAsOptionV>
@@ -132,7 +132,7 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <AdditionalCompilerOptions>
       </AdditionalCompilerOptions>
-      <Defines>__CUDACC_VER_MAJOR__=12;GLM_FORCE_CUDA;GLM_ENABLE_EXPERIMENTAL;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT;GLM_FORCE_SWIZZLE_XYZW</Defines>
+      <Defines>__CUDACC_VER_MAJOR__=12;GLM_FORCE_CUDA;GLM_ENABLE_EXPERIMENTAL;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT;GLM_FORCE_XYZW_ONLY</Defines>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
       <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr -Xptxas=-v</AdditionalOptions>
       <PtxAsOptionV>false</PtxAsOptionV>
@@ -145,7 +145,7 @@
       <TypeInfo>false</TypeInfo>
       <Warning>W3</Warning>
       <GPUDebugInfo>false</GPUDebugInfo>
-      <MaxRegCount>64</MaxRegCount>
+      <MaxRegCount>0</MaxRegCount>
     </CudaCompile>
     <CudaLink>
       <PerformDeviceLinkTimeOptimization>true</PerformDeviceLinkTimeOptimization>
@@ -196,6 +196,7 @@
     <ClInclude Include="CudaCamera.cuh" />
     <ClInclude Include="CudaMath.cuh" />
     <ClInclude Include="CudaRenderer.cuh" />
+    <ClInclude Include="Debug.h" />
     <ClInclude Include="Dielectric.h" />
     <ClInclude Include="Hittable.h" />
     <ClInclude Include="HittableList.h" />

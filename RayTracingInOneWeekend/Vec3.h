@@ -272,11 +272,11 @@ __device__ inline float custom_rsqrtf(float x)
 #endif
 }
 
-__device__ inline glm::vec3 unit_vector(const glm::vec3& v)
-{
-	float invLen = glm::fastInverseSqrt(glm::dot(v, v));
-	return {v.x * invLen, v.y * invLen, v.z * invLen};
-}
+//__device__ inline glm::vec3 unit_vector(const glm::vec3& v)
+//{
+//	float invLen = glm::fastInverseSqrt(glm::dot(v, v));
+//	return {v.x * invLen, v.y * invLen, v.z * invLen, };
+//}
 
 __device__ inline glm::vec3 reflect(const glm::vec3& v, const glm::vec3& n)
 {
@@ -309,14 +309,14 @@ __device__ inline float fastLength(const glm::vec3& v)
 	return lenSq > 0.f ? lenSq * custom_rsqrtf(lenSq) : 0.f;
 }
 
-__host__ __device__ inline glm::vec3 make_unit_vector(glm::vec3 e)
-{
-	float k = 1.0f / sqrt(e.x * e.x + e.y * e.y + e.z * e.z);
-	e.x *= k;
-	e.y *= k;
-	e.z *= k;
-	return {e.x, e.y, e.z};
-}
+//__host__ __device__ inline glm::vec3 make_unit_vector(glm::vec3 e)
+//{
+//	float k = 1.0f / sqrt(e.x * e.x + e.y * e.y + e.z * e.z);
+//	e.x *= k;
+//	e.y *= k;
+//	e.z *= k;
+//	return {e.x, e.y, e.z};
+//}
 
 
 namespace math

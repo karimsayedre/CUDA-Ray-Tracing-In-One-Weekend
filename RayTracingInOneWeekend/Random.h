@@ -6,7 +6,7 @@
 
 #include "CudaCamera.cuh"
 
-//__device__ int RandomInt(uint32_t& seed, const int min, const int max);
+//__device__ int RandomInt(uint32_t& seed, const int Min, const int Max);
 
 __device__ inline int RandomInt(curandState* state, int min, int max)
 {
@@ -49,9 +49,9 @@ __device__ inline float RandomFloat(uint32_t& seed)
 	return (float(RandomInt(seed) & 0x00FFFFFF) / float(0x01000000));
 }
 
-//__device__ int RandomInt(uint32_t& seed, const int min, const int max)
+//__device__ int RandomInt(uint32_t& seed, const int Min, const int Max)
 //{
-//	return static_cast<int>(RandomFloat(seed, (float)min, (float)max + 1.0f));
+//	return static_cast<int>(RandomFloat(seed, (float)Min, (float)Max + 1.0f));
 //}
 
 __device__ inline glm::vec3 RandomVec3(uint32_t& seed, const float min, const float max)

@@ -11,6 +11,8 @@
 
 #define CHECK_CUDA_ERRORS(val) check_cuda((val), #val, __FILE__, __LINE__)
 
+struct BVHSoA;
+
 namespace std
 {
 	class mutex;
@@ -39,9 +41,9 @@ class CudaRenderer
 
 	__host__ ~CudaRenderer();
   private:
-	Hittable*  d_list;
+	HittableList*  d_list;
 	//Material*  d_materials;
-	Hittable** d_world;
+	BVHSoA* d_world;
 	Camera*	   d_camera;
 
 	uint32_t*	 d_rand_seeds;

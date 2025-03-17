@@ -84,22 +84,11 @@ struct Materials
 		}
 	}
 
-	static void Init(uint32_t maxMaterialCount);
 };
 
 class Material
 {
-	//inline static MaterialSoA m_MaterialSoA;
-
   public:
-	//__device__ inline static void Add(MaterialType	 type,
-	//                           const glm::vec3& albedo,
-	//                           float			 fuzz  = 0.0f,
-	//                           float			 ior   = 1.0f,
-	//                           int				 index = -1)
-	//{
-	//	m_MaterialSoA.Add(type, albedo, fuzz, ior, index);
-	//}
 	__device__ static bool Scatter(Ray& incomingRay, Ray& scatteredRay, const HitRecord& rec, glm::vec3& attenuation, uint32_t& randSeed, uint32_t materialIndex);
 };
 
