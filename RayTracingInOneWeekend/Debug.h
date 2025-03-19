@@ -23,12 +23,12 @@ __device__ inline void DebugBVHNode(BVHSoA* soa, uint32_t nodeIndex, int depth =
 		printf("Leaf Node %u: Sphere %u, Bounds: (%.2f,%.2f,%.2f) to (%.2f,%.2f,%.2f)\n",
 			   nodeIndex,
 			   soa->m_left[nodeIndex],
-			   soa->m_bounds[nodeIndex].Min.x,
-			   soa->m_bounds[nodeIndex].Min.y,
-			   soa->m_bounds[nodeIndex].Min.z,
-			   soa->m_bounds[nodeIndex].Max.x,
-			   soa->m_bounds[nodeIndex].Max.y,
-			   soa->m_bounds[nodeIndex].Max.z);
+			   soa->m_bounds_min[nodeIndex].x,
+			   soa->m_bounds_min[nodeIndex].y,
+			   soa->m_bounds_min[nodeIndex].z,
+			   soa->m_bounds_max[nodeIndex].x,
+			   soa->m_bounds_max[nodeIndex].y,
+			   soa->m_bounds_max[nodeIndex].z);
 	}
 	else
 	{
@@ -36,12 +36,12 @@ __device__ inline void DebugBVHNode(BVHSoA* soa, uint32_t nodeIndex, int depth =
 			   nodeIndex,
 			   soa->m_left[nodeIndex],
 			   soa->m_right[nodeIndex],
-			   soa->m_bounds[nodeIndex].Min.x,
-			   soa->m_bounds[nodeIndex].Min.y,
-			   soa->m_bounds[nodeIndex].Min.z,
-			   soa->m_bounds[nodeIndex].Max.x,
-			   soa->m_bounds[nodeIndex].Max.y,
-			   soa->m_bounds[nodeIndex].Max.z);
+			   soa->m_bounds_min[nodeIndex].x,
+			   soa->m_bounds_min[nodeIndex].y,
+			   soa->m_bounds_min[nodeIndex].z,
+			   soa->m_bounds_max[nodeIndex].x,
+			   soa->m_bounds_max[nodeIndex].y,
+			   soa->m_bounds_max[nodeIndex].z);
 
 		// Recursively print children
 		if (depth < 10)
@@ -51,7 +51,6 @@ __device__ inline void DebugBVHNode(BVHSoA* soa, uint32_t nodeIndex, int depth =
 		}
 	}
 }
-
 
 // Add this to your ray tracing kernel to debug traversal
 __device__ inline void DebugTraversal(const Ray& ray, BVHSoA* world, HittableList* list, uint32_t pixel_index)
@@ -67,7 +66,7 @@ __device__ inline void DebugTraversal(const Ray& ray, BVHSoA* world, HittableLis
 			   ray.Direction().z);
 
 		HitRecord rec;
-		bool	  hit = TraverseBVH_SoA(ray, 0.001f, FLT_MAX, list, world, world->root, rec);
+		bool	  hit = world->TraverseBVH_SoA(ray, 0.001f, FLT_MAX, list, world->root, rec);
 		printf("Hit result: %s\n", hit ? "true" : "false");
 
 		if (hit)

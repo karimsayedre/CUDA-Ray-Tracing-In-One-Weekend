@@ -144,7 +144,6 @@
       <RuntimeChecks>Default</RuntimeChecks>
       <TypeInfo>false</TypeInfo>
       <Warning>W3</Warning>
-      <GPUDebugInfo>false</GPUDebugInfo>
       <MaxRegCount>0</MaxRegCount>
     </CudaCompile>
     <CudaLink>

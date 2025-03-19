@@ -118,7 +118,7 @@ __global__ void create_world(HittableList* d_list, /*Material* d_materials,*/ BV
 		for (uint32_t index = 0; index < d_list->m_Count; ++index)
 			indices[index] = index;
 
-		d_world->root = BuildBVH_SoA(d_list, indices, 0, d_list->m_Count, d_world);
+		d_world->root = d_world->BuildBVH_SoA(d_list, indices, 0, d_list->m_Count);
 		printf("BVH created with %u nodes out of %u allocated\n", d_world->m_count, d_world->m_capacity);
 
 		printf("BVH Root: %u\n", d_world->root);
@@ -134,7 +134,7 @@ __global__ void create_world(HittableList* d_list, /*Material* d_materials,*/ BV
 //	return vec3(v.x() / length, v.y() / length, v.z() / length);
 //}
 
-__device__ glm::vec3 RayColor(Ray& ray, BVHSoA* world, HittableList* list, const uint32_t depth, uint32_t& randSeed)
+__device__ glm::vec3 RayColor(Ray& ray, BVHSoA* __restrict__ world, HittableList* __restrict__ list, const uint32_t depth, uint32_t& randSeed)
 {
 	glm::vec3 cur_attenuation(1.0f);
 	Ray		  current_ray = ray;
@@ -143,10 +143,13 @@ __device__ glm::vec3 RayColor(Ray& ray, BVHSoA* world, HittableList* list, const
 	{
 		HitRecord rec;
 		// Use current_ray instead of ray
-		if (!TraverseBVH_SoA(current_ray, 0.001f, FLT_MAX, list, world, world->root, rec))
+		if (!world->TraverseBVH_SoA(current_ray, 0.001f, FLT_MAX, list, world->root, rec))
 		{
 			// Sky color calculation
-			glm::vec3 unit_direction = glm::normalize(current_ray.Direction());
+			glm::vec3 unit_direction = current_ray.Direction();
+			//float	  inv_length	 = rsqrtf(unit_direction.x * unit_direction.x + unit_direction.y * unit_direction.y + unit_direction.z * unit_direction.z);
+			//glm::vec3 unit_direction = unit_direction * inv_length;
+
 			float	  t				 = 0.5f * (unit_direction.y + 1.0f);
 			glm::vec3 sky_color		 = (1.0f - t) * glm::vec3(1.0) + t * glm::vec3(0.5f, 0.7f, 1.0f);
 			return cur_attenuation * sky_color;
@@ -163,7 +166,7 @@ __device__ glm::vec3 RayColor(Ray& ray, BVHSoA* world, HittableList* list, const
 
 		// Scatter ray with optimized material interaction
 		Ray		  scattered_ray;
-		glm::vec3 attenuation = glm::vec3(1.0f);
+		glm::vec3 attenuation {1.0f};
 		if (!Material::Scatter(current_ray, scattered_ray, rec, attenuation, randSeed, rec.MaterialIndex))
 			break;
 
@@ -247,7 +250,7 @@ __host__ void CudaRenderer::Init()
 
 __host__ void CudaRenderer::Render() const
 {
-	dim3 block(16,16);
+	dim3 block(8, 8);
 	dim3 grid((m_Width + block.x - 1) / block.x,
 			  (m_Height + block.y - 1) / block.y);
 

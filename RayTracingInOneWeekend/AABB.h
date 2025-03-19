@@ -26,26 +26,28 @@ class alignas(32) AABB
 	glm::vec3 Min;
 	glm::vec3 Max;
 
-	AABB() = default; // The default AABB is empty, since Intervals are empty by default.
+	__device__ AABB()
+		: Min(std::numeric_limits<float>::max()),
+		  Max(-std::numeric_limits<float>::max())
+	{
+	}
 
 	__device__ AABB(const Interval& ix, const Interval& iy, const Interval& iz)
-		: Min(ix.min, iy.min, iz.min), Max(ix.max, iy.max, iz.max)
+		: Min(glm::vec3(ix.min, iy.min, iz.min)),
+		  Max(glm::vec3(ix.max, iy.max, iz.max))
 	{
 	}
 
 	__device__ AABB(const glm::vec3& a, const glm::vec3& b)
-		: Min(glm::min(a.x, b.x), glm::min(a.y, b.y), glm::min(a.z, b.z)), Max(glm::max(a.x, b.x), glm::max(a.y, b.y), glm::max(a.z, b.z))
+		: Min(glm::min(a, b)),
+		  Max(glm::max(a, b))
 	{
-		// Treat the two points a and b as extrema for the bounding box, so we don't require a
-		// particular minimum/maximum coordinate order.
 	}
 
 	__device__ AABB(const AABB& box0, const AABB& box1)
-		: Min(glm::min(box0.Min, box1.Min)), Max(glm::max(box0.Max, box1.Max))
+		: Min(glm::min(box0.Min, box1.Min)),
+		  Max(glm::max(box0.Max, box1.Max))
 	{
-		// x = Interval(box0.x, box1.x);
-		// y = Interval(box0.y, box1.y);
-		// z = Interval(box0.z, box1.z);
 	}
 
 	//__device__ [[nodiscard]] AABB Pad() const

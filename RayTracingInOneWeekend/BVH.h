@@ -28,11 +28,12 @@ struct BVHSoA
 {
 	uint32_t* m_left;  // Index of left child (or sphere index for leaves)
 	uint32_t* m_right; // Index of right child (unused for leaves)
-	AABB*	  m_bounds;
-	bool*	  m_is_leaf;
-	uint32_t  m_capacity;
-	uint32_t  m_count;
-	uint32_t  root;
+	glm::vec3* m_bounds_min;
+	glm::vec3* m_bounds_max;
+	bool*	   m_is_leaf;
+	uint32_t   m_capacity;
+	uint32_t   m_count;
+	uint32_t   root;
 
 	// Device constructor (not usable from host)
 	__host__ __device__ BVHSoA(uint32_t max_nodes)
@@ -48,7 +49,9 @@ struct BVHSoA
 		// Allocate memory for arrays on the device
 		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_left, maxNodes * sizeof(uint32_t)));
 		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_right, maxNodes * sizeof(uint32_t)));
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds, maxNodes * sizeof(AABB)));
+		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds_min, maxNodes * sizeof(glm::vec3)));
+		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds_max, maxNodes * sizeof(glm::vec3)));
+		// CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds, maxNodes * sizeof(AABB)));
 		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_is_leaf, maxNodes * sizeof(bool)));
 
 		h_bvh.m_capacity = maxNodes;
@@ -76,27 +79,63 @@ struct BVHSoA
 		const AABB& box,
 		bool		leaf)
 	{
-		m_bounds[m_count]  = box;
-		m_left[m_count]	   = left_idx;
-		m_right[m_count]   = right_idx;
-		m_is_leaf[m_count] = leaf;
+		// m_bounds[m_count]  = box;
+		m_bounds_min[m_count] = box.Min;
+		m_bounds_max[m_count] = box.Max;
+		m_left[m_count]		  = left_idx;
+		m_right[m_count]	  = right_idx;
+		m_is_leaf[m_count]	  = leaf;
 		return m_count++;
 	}
 
+	__device__ bool IntersectBounds(const Ray& ray, uint32_t node_index, float t_min, float& t_max) const
+	{
+		const glm::vec3	 min_bound(m_bounds_min[node_index]);
+		const glm::vec3	 max_bound(m_bounds_max[node_index]);
+		const glm::vec3& origin	 = ray.Origin();
+		const glm::vec3& inv_dir = ray.InverseDirection();
+
+		glm::vec3 t1 = (min_bound - origin) * inv_dir;
+		glm::vec3 t2 = (max_bound - origin) * inv_dir;
+
+		glm::vec3 tmin = glm::min(t1, t2);
+		glm::vec3 tmax = glm::max(t1, t2);
+
+		float t_enter = fmax(fmax(tmin.x, tmin.y), tmin.z);
+		float t_exit  = fmin(fmin(tmax.x, tmax.y), tmax.z);
+
+		return (t_exit > t_enter) && (t_enter < t_max) && (t_exit > t_min);
+	}
+
+	__device__ __forceinline__ uint32_t GetSplitAxis(uint32_t node_idx)
+	{
+		// Derive from bounds - determine which axis has the largest extent
+		glm::vec3 min_bounds = (m_bounds_min[node_idx]);
+		glm::vec3 max_bounds = (m_bounds_max[node_idx]);
+		glm::vec3 extents	  = glm::vec3(
+			   max_bounds.x - min_bounds.x,
+			   max_bounds.y - min_bounds.y,
+			   max_bounds.z - min_bounds.z);
+
+		// Return axis with largest extent
+		if (extents.x > extents.y && extents.x > extents.z)
+			return 0;
+		if (extents.y > extents.z)
+			return 1;
+		return 2;
+	}
+
+	__device__ uint32_t BuildBVH_SoA(
+		const HittableList* list,
+		uint32_t*			indices,
+		uint32_t			start,
+		uint32_t			end);
+
+	__device__ bool TraverseBVH_SoA(
+		const Ray&	  ray,
+		float		  tmin,
+		float		  tmax,
+		HittableList* list,
+		uint32_t	  root_index,
+		HitRecord&	  best_hit);
 };
-
-__device__ uint32_t BuildBVH_SoA(
-	const HittableList* list,
-	uint32_t*			indices,
-	uint32_t			start,
-	uint32_t			end,
-	BVHSoA*				soa);
-
-__device__ bool TraverseBVH_SoA(
-	const Ray&	  ray,
-	float		  tmin,
-	float		  tmax,
-	HittableList* list,
-	BVHSoA*		  soa,
-	uint32_t	  root_index,
-	HitRecord&	  best_hit);

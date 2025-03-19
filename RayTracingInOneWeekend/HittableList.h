@@ -38,7 +38,12 @@ class HittableList
 		return hitAnything;
 	}
 
-  //private:
+	__device__ bool HitSphere(uint32_t sphereIndex, const Ray& ray, float tmin, float& closestSoFar, HitRecord& hitRecord) const
+	{
+		return m_Objects[sphereIndex].Hit(ray, tmin, closestSoFar, hitRecord);
+	}
+
+	//private:
 
 	Sphere* m_Objects;
 	uint32_t   m_Count;
