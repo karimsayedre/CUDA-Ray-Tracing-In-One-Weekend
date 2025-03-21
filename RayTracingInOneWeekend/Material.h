@@ -1,5 +1,4 @@
 #pragma once
-#include "Hittable.h"
 #include "Random.h"
 #include "Ray.h"
 #include "Vec3.h"

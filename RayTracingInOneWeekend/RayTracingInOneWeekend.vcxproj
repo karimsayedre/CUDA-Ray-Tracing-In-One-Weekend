@@ -176,46 +176,30 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <CudaCompile Include="Hittable.cu">
-      <FileType>Document</FileType>
-    </CudaCompile>
     <ClCompile Include="Log.cpp" />
-    <ClCompile Include="Metal.cpp" />
     <ClCompile Include="Ray.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <CudaCompile Include="HittableList.cu" />
-    <CudaCompile Include="Sphere.cu">
-      <FileType>Document</FileType>
-    </CudaCompile>
     <ClCompile Include="Vec3.cpp" />
     <ClInclude Include="AABB.h" />
     <ClInclude Include="BVH.h" />
-    <ClInclude Include="BVHPool.h" />
-    <ClInclude Include="Camera.h" />
     <ClInclude Include="CudaCamera.cuh" />
-    <ClInclude Include="CudaMath.cuh" />
     <ClInclude Include="CudaRenderer.cuh" />
     <ClInclude Include="Debug.h" />
-    <ClInclude Include="Dielectric.h" />
-    <ClInclude Include="Hittable.h" />
     <ClInclude Include="HittableList.h" />
     <ClInclude Include="Interval.h" />
-    <ClInclude Include="Lambert.h" />
     <ClInclude Include="Log.h" />
     <ClCompile Include="RayTracingInOneWeekend.cpp" />
     <ClInclude Include="Material.h" />
-    <ClInclude Include="Metal.h" />
     <ClInclude Include="pch.cuh" />
     <ClInclude Include="Random.h" />
     <ClInclude Include="Ray.h" />
     <ClInclude Include="Renderer.h" />
-    <ClInclude Include="Sphere.h" />
     <ClInclude Include="Vec3.h" />
     <ClInclude Include="Viewer.h" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="BVH.cu" />
-    <CudaCompile Include="BVHPool.cu" />
     <CudaCompile Include="CUDARender.cu">
       <FileType>Document</FileType>
     </CudaCompile>

@@ -7,17 +7,20 @@
 #include <iostream>
 #include <SFML/Graphics/Image.hpp>
 
-#include "Hittable.h"
 
 #define CHECK_CUDA_ERRORS(val) check_cuda((val), #val, __FILE__, __LINE__)
 
+struct HittableList;
 struct Materials;
 struct BVHSoA;
 
-namespace std
+struct HitRecord
 {
-	class mutex;
-}
+	Vec3 Location;
+	Float T;
+	Vec3  Normal;
+	uint16_t MaterialIndex;
+};
 
 class Camera;
 __host__ void check_cuda(cudaError_t result, char const* const func, const char* const file, int const line);

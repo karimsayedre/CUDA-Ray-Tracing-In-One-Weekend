@@ -1,6 +1,8 @@
 #include "pch.cuh"
-#include <thrust/sort.h>
 #include "BVH.h"
+
+#include "AABB.h"
+#include "Ray.h"
 
 __device__ uint32_t BVHSoA::BuildBVH_SoA(const HittableList* list, uint32_t* indices, uint32_t start, uint32_t end)
 {
@@ -99,7 +101,7 @@ __device__ bool BVHSoA::TraverseBVH_SoA(const Ray& ray, Float tmin, Float tmax, 
 			uint32_t  sphere_index = m_left[entry];
 
 			// Use direct access to sphere components instead of fetching the whole object
-			if (list->HitSphere(sphere_index, ray, tmin, closest_so_far, temp_rec))
+			if (list->Hit(ray, tmin, closest_so_far, temp_rec, sphere_index))
 			{
 				closest_so_far = temp_rec.T;
 				best_hit	   = temp_rec;

@@ -13,6 +13,7 @@
 #include <vector>
 #include <cmath>
 #include <limits>
+#include <thrust/sort.h>
 
 #include <cuda_fp16.h>
 #include <math.h>

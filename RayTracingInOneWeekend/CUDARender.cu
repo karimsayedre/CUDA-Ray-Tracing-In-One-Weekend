@@ -2,7 +2,6 @@
 #include "BVH.h"
 #include "HittableList.h"
 #include "Material.h"
-#include "Sphere.h"
 #include "Random.h"
 
 #define RND (curand_uniform(&local_rand_state))
@@ -49,9 +48,9 @@ __global__ void create_world(HittableList* d_list, Materials* d_materials, BVHSo
 		curandState local_rand_state = *rand_state;
 		uint16_t	i				 = 0;
 
-		d_materials->Add(MaterialType::Lambert, Vec3(0.5f, 0.5f, 0.5f), 0.0f, 1.0f);
 		// Ground sphere:
-		new (&d_list->m_Objects[i]) Sphere(Vec3(0, -1000.0f, -1), 1000.0f, i);
+		d_materials->Add(MaterialType::Lambert, Vec3(0.5f, 0.5f, 0.5f), 0.0f, 1.0f);
+		d_list->Add(Vec3(0, -1000.0f, -1), 1000.0f);
 		i++;
 
 		// For each grid position:
@@ -64,19 +63,19 @@ __global__ void create_world(HittableList* d_list, Materials* d_materials, BVHSo
 				if (choose_mat < __float2half(0.8f))
 				{
 					d_materials->Add(MaterialType::Lambert, Vec3(RND * RND, RND * RND, RND * RND), 0.0f, 1.0f);
-					new (&d_list->m_Objects[i]) Sphere(center, 0.2f, i);
+					d_list->Add(center, 0.2f);
 					i++;
 				}
 				else if (choose_mat < __float2half(0.95f))
 				{
 					d_materials->Add(MaterialType::Metal, Vec3(0.5f * (1 + RND), 0.5f * (1 + RND), 0.5f * (1 + RND)), 0.5f * RND, 1.0f);
-					new (&d_list->m_Objects[i]) Sphere(center, 0.2f, i);
+					d_list->Add(center, 0.2f);
 					i++;
 				}
 				else
 				{
 					d_materials->Add(MaterialType::Dielectric, Vec3(1.0), 0.0f, 1.5f);
-					new (&d_list->m_Objects[i]) Sphere(center, 0.2f, i);
+					d_list->Add(center, 0.2f);
 					i++;
 				}
 			}
@@ -84,17 +83,16 @@ __global__ void create_world(HittableList* d_list, Materials* d_materials, BVHSo
 
 		// Add the three big spheres:
 		d_materials->Add(MaterialType::Dielectric, Vec3(1.0), 0.0f, 1.5f);
-		new (&d_list->m_Objects[i]) Sphere(Vec3(0, 1, 0), 1.0f, i);
+		d_list->Add(Vec3(0, 1, 0), 1.0f);
+
 		i++;
 		d_materials->Add(MaterialType::Lambert, Vec3(0.4f, 0.2f, 0.1f), 0.0f, 1.0f);
-		new (&d_list->m_Objects[i]) Sphere(Vec3(-4, 1, 0), 1.0f, i);
+		d_list->Add(Vec3(-4, 1, 0), 1.0f);
 		i++;
 
 		d_materials->Add(MaterialType::Metal, Vec3(0.7f, 0.6f, 0.5f), 0.0f, 1.0f);
-		new (&d_list->m_Objects[i]) Sphere(Vec3(4, 1, 0), 1.0f, i);
+		d_list->Add(Vec3(4, 1, 0), 1.0f);
 		i++;
-
-		d_list->SetAABBs();
 
 		*rand_state = local_rand_state;
 
@@ -200,19 +198,11 @@ __host__ void CudaRenderer::Init()
 	// Allocate memory for the HittableList struct in device memory
 	CHECK_CUDA_ERRORS(cudaMalloc((void**)&d_list, sizeof(HittableList)));
 
-	// Allocate memory for the objects array inside HittableList
-	void* tempObjects;
-	void* tempAABBs;
-	CHECK_CUDA_ERRORS(cudaMalloc(&tempObjects, numHitables * sizeof(Sphere)));
-	CHECK_CUDA_ERRORS(cudaMalloc(&tempAABBs, numHitables * sizeof(AABB)));
-
-	// Copy the device pointer for objects into d_list->m_Objects
-	CHECK_CUDA_ERRORS(cudaMemcpy(&(d_list->m_Objects), &tempObjects, sizeof(Sphere*), cudaMemcpyHostToDevice));
-	CHECK_CUDA_ERRORS(cudaMemcpy(&(d_list->m_AABB), &tempAABBs, sizeof(AABB*), cudaMemcpyHostToDevice));
 
 	// Copy the hitable count to the device
 	CHECK_CUDA_ERRORS(cudaMemcpy(&(d_list->m_Count), &numHitables, sizeof(int), cudaMemcpyHostToDevice));
 
+	HittableList::Init(d_list, numHitables);
 	BVHSoA::Init(d_world, numHitables * 2 - 1);
 	Materials::Init(d_materials, numHitables);
 

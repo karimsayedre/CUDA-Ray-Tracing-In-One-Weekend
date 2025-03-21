@@ -1,7 +1,6 @@
 #pragma once
-#include "Hittable.h"
 #include "HittableList.h"
-#include "Sphere.h"
+#include "Ray.h"
 
 struct BVHSoA
 {
