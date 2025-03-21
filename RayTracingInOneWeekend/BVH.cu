@@ -12,7 +12,7 @@ __device__ uint32_t BVHSoA::BuildBVH_SoA(const HittableList* list, uint32_t* ind
 	for (uint32_t i = start; i < end; ++i)
 	{
 		uint32_t sphere_index = indices[i];
-		AABB	 current_box  = list->m_Objects[sphere_index].GetBoundingBox();
+		const AABB&	 current_box  = list->m_AABB[sphere_index];
 		if (first_box)
 		{
 			box		  = current_box;
@@ -36,14 +36,14 @@ __device__ uint32_t BVHSoA::BuildBVH_SoA(const HittableList* list, uint32_t* ind
 		uint32_t idx_b = indices[start + 1];
 
 		// Create leaf nodes for each sphere
-		AABB box_a = list->m_Objects[idx_a].GetBoundingBox();
-		AABB box_b = list->m_Objects[idx_b].GetBoundingBox();
+		const AABB& box_a = list->m_AABB[idx_a];
+		const AABB& box_b = list->m_AABB[idx_b];
 
 		uint32_t left_leaf	= AddNode(idx_a, UINT32_MAX, box_a, true);
 		uint32_t right_leaf = AddNode(idx_b, UINT32_MAX, box_b, true);
 
 		// Create parent internal node
-		AABB combined = AABB(box_a, box_b);
+		const AABB combined(box_a, box_b);
 		return AddNode(left_leaf, right_leaf, combined, false);
 	}
 
@@ -51,24 +51,10 @@ __device__ uint32_t BVHSoA::BuildBVH_SoA(const HittableList* list, uint32_t* ind
 	int	 axis		= box.LongestAxis();
 	auto comparator = [&](uint32_t a, uint32_t b)
 	{
-		return list->m_Objects[a].GetBoundingBox().Center()[axis] < list->m_Objects[b].GetBoundingBox().Center()[axis];
+		return list->m_AABB[a].Center()[axis] < list->m_AABB[b].Center()[axis];
 	};
 
-	// Sort the indices - THIS IS IMPORTANT!
-	// You need to implement this sorting, either using thrust::sort or another method
-	// For example, a simple bubble sort (not efficient, but for illustration):
-	for (uint32_t i = start; i < end; i++)
-	{
-		for (uint32_t j = start; j < end - 1; j++)
-		{
-			if (comparator(indices[j + 1], indices[j]))
-			{
-				uint32_t temp  = indices[j];
-				indices[j]	   = indices[j + 1];
-				indices[j + 1] = temp;
-			}
-		}
-	}
+	thrust::sort(indices + start, indices + end, comparator);
 
 	// Recursively build children
 	uint32_t	   mid		 = start + object_span / 2;
@@ -88,25 +74,15 @@ __device__ uint32_t BVHSoA::BuildBVH_SoA(const HittableList* list, uint32_t* ind
 	return AddNode(left_idx, right_idx, combined, false);
 }
 
-__device__ bool BVHSoA::TraverseBVH_SoA(const Ray& ray, float tmin, float tmax, HittableList* __restrict__ list, uint32_t root_index, HitRecord& best_hit)
+__device__ bool BVHSoA::TraverseBVH_SoA(const Ray& ray, Float tmin, Float tmax, HittableList* __restrict__ list, uint32_t root_index, HitRecord& best_hit) const
 {
 	bool  hit_anything	 = false;
-	float closest_so_far = tmax; // Track current best hit distance
+	Float closest_so_far = tmax; // Track current best hit distance
 
 	uint32_t stack[10]; // Reduced from 64 if your scenes don't need deep traversal
-	int		   stack_ptr = 0;
+	int		 stack_ptr = 0;
 
-	stack[stack_ptr++] = {root_index};
-
-	// Near the beginning of the while loop
-	//if (stack_ptr < 30)
-	//{ // Make sure we have room in the stack
-	//	// Prefetch the next nodes that we might need
-	//	uint32_t prefetch_idx = stack[stack_ptr - 1].node_idx;
-	//	__prefetch(&soa->m_is_leaf[prefetch_idx], __CUDA_PREFETCH_L1);
-	//	__prefetch(&soa->m_left[prefetch_idx], __CUDA_PREFETCH_L1);
-	//	__prefetch(&soa->m_right[prefetch_idx], __CUDA_PREFETCH_L1);
-	//}
+	stack[stack_ptr++] = root_index;
 
 	while (stack_ptr > 0)
 	{
@@ -132,25 +108,8 @@ __device__ bool BVHSoA::TraverseBVH_SoA(const Ray& ray, float tmin, float tmax, 
 		}
 		else
 		{
-			// Traverse children in front-to-back order based on ray direction
-			//uint32_t left  = m_left[entry];
-			//uint32_t right = m_right[entry];
-
-			// Simple heuristic - determine traversal order based on ray direction
-			// and split axis (assuming split axis is stored or derivable)
-			//uint32_t split_axis			 = GetSplitAxis(entry.node_idx);
-			//bool	 traverse_left_first = ray.Direction()[split_axis] < 0.0f;
-
-			//if (traverse_left_first)
-			//{
 			stack[stack_ptr++] = m_right[entry];
 			stack[stack_ptr++] = m_left[entry];
-			//}
-			//else
-			{
-				//stack[stack_ptr++] = {left};
-				//stack[stack_ptr++] = {right};
-			}
 		}
 	}
 

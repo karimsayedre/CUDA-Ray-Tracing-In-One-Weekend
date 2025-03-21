@@ -10,16 +10,16 @@
 class Camera
 {
   public:
-	glm::vec3 m_Origin;
-	glm::vec3 m_LowerLeftCorner;
-	glm::vec3 m_Horizontal;
-	glm::vec3 m_Vertical;
+	Vec3 m_Origin;
+	Vec3 m_LowerLeftCorner;
+	Vec3 m_Horizontal;
+	Vec3 m_Vertical;
 
-	__host__ __device__ Camera(const glm::vec3& lookFrom, const glm::vec3& lookAt, const glm::vec3& up, const float vFov, const float aspectRatio)
+	__device__ __host__ Camera(const Vec3& lookFrom, const Vec3& lookAt, const Vec3& up, const Float vFov, const Float aspectRatio)
 	{
-		const auto theta		  = vFov * ((float)M_PI) / 180.0f;
-		const auto h			  = std::tan(theta / 2.0f);
-		const auto viewportHeight = 2.0f * h;
+		const auto theta		  = vFov * ((Float)M_PI) / __float2half(180.0f);
+		const Float h			  = glm::tan(theta / __float2half(2.0f));
+		const auto	viewportHeight = __float2half(2.0f) * h;
 		const auto viewportWidth  = aspectRatio * viewportHeight;
 
 		const auto w = glm::normalize(lookFrom - lookAt);
@@ -29,10 +29,10 @@ class Camera
 		m_Origin		  = lookFrom;
 		m_Horizontal	  = u * viewportWidth;
 		m_Vertical		  = v * viewportHeight;
-		m_LowerLeftCorner = m_Origin - m_Horizontal / 2.0f - m_Vertical / 2.0f - w;
+		m_LowerLeftCorner = m_Origin - m_Horizontal / __float2half(2.0f) - m_Vertical / __float2half(2.0f) - w;
 	}
 
-	__device__ Ray GetRay(float u, float v) const
+	__device__ Ray GetRay(Float u, Float v) const
 	{
 		return {m_Origin, m_LowerLeftCorner + u * m_Horizontal + v * m_Vertical - m_Origin};
 	}

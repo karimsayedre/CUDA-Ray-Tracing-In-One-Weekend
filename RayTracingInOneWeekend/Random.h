@@ -26,7 +26,7 @@ __device__ inline uint32_t pcg_hash(uint32_t input)
 	return (word >> 22u) ^ word;
 }
 
-__device__ inline float RandomFloat(uint32_t& seed, const float min, const float max)
+__device__ inline Float RandomFloat(uint32_t& seed, const float min, const float max)
 {
 	seed = pcg_hash(seed);
 	return min + (float)(seed) / (float)(UINT_MAX / (max - min));
@@ -38,7 +38,7 @@ __device__ inline uint32_t RandomInt(uint32_t& seed)
 	return (seed = (1664525 * seed + 1013904223));
 }
 
-__device__ inline float RandomFloat(uint32_t& seed)
+__device__ inline Float RandomFloat(uint32_t& seed)
 {
 	//// Float version using bitmask from Numerical Recipes
 	// const uint one = 0x3f800000;
@@ -54,12 +54,12 @@ __device__ inline float RandomFloat(uint32_t& seed)
 //	return static_cast<int>(RandomFloat(seed, (float)Min, (float)Max + 1.0f));
 //}
 
-__device__ inline glm::vec3 RandomVec3(uint32_t& seed, const float min, const float max)
+__device__ inline Vec3 RandomVec3(uint32_t& seed, const float min, const float max)
 {
 	return {RandomFloat(seed, min, max), RandomFloat(seed, min, max), RandomFloat(seed, min, max)};
 }
 
-__device__ inline glm::vec3 RandomVec3(uint32_t& seed)
+__device__ inline Vec3 RandomVec3(uint32_t& seed)
 {
 	return {RandomFloat(seed), RandomFloat(seed), RandomFloat(seed)};
 }
@@ -69,7 +69,7 @@ __device__ inline glm::vec3 RandomVec3(uint32_t& seed)
 //	return (RandomVec3(seed).make_unit_vector());
 //}
 
-__device__ inline glm::vec3 randomUnitVector(uint32_t& randSeed)
+__device__ inline Vec3 randomUnitVector(uint32_t& randSeed)
 {
 	// Generate a random direction uniformly on the unit sphere
 	// (One possible approach: spherical coordinates)
@@ -84,14 +84,14 @@ __device__ inline glm::vec3 randomUnitVector(uint32_t& randSeed)
 }
 
 // Additional Optimization: Faster Random Generation
-__device__ inline glm::vec3 RandomUnitVec3(uint32_t& seed)
+__device__ inline Vec3 RandomUnitVec3(uint32_t& seed)
 {
 	// Use faster, more uniform distribution
-	float z	  = 2.0f * RandomFloat(seed) - 1.0f;
+	float z	  = __float2half(2.0f) * RandomFloat(seed) - __float2half(1.0f);
 	float r	  = sqrtf(1.0f - z * z);
-	float phi = 2.0f * 3.14159f * RandomFloat(seed);
+	float phi = __float2half(2.0f) * __float2half(3.14159f) * RandomFloat(seed);
 
-	return glm::vec3(
+	return Vec3(
 		r * cosf(phi),
 		r * sinf(phi),
 		z);

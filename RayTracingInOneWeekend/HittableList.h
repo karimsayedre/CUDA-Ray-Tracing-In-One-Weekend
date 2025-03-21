@@ -5,48 +5,47 @@
 
 struct HitRecord;
 
-class HittableList 
+class HittableList
 {
   public:
-	__device__ HittableList(Sphere* objects, uint32_t count)
-		: m_Objects(objects), m_Count(count)
-	{
-		//// Add(object);
-		//for (uint32_t i = 0; i < count; i++)
-		//{
-		//	AABB objectBox = objects[i]->GetBoundingBox(0, 1);
-		//	m_BoundingBox  = AABB(m_BoundingBox, objectBox);
-		//}
-	}
+	HittableList() = delete;
 
+	__device__ void SetAABBs() const
+	{
+		for (uint32_t i = 0; i < m_Count; i++)
+		{
+			m_AABB[i] = AABB(m_Objects[i].m_Center - m_Objects[i].m_Radius, m_Objects[i].m_Center + m_Objects[i].m_Radius);
+		}
+	}
 
 	__device__ bool Hit(const Ray& ray, const Float tMin, Float tMax, HitRecord& record) const
 	{
 		HitRecord tempRecord;
-		bool	  hitAnything  = false;
-		//Float	  closestSoFar = tMax;
+		bool	  hitAnything = false;
+		// Float	  closestSoFar = tMax;
 
 		for (uint32_t i = 0; i < m_Count; i++)
 		{
 			if (m_Objects[i].Hit(ray, tMin, tMax, tempRecord))
 			{
-				hitAnything	 = true;
+				hitAnything = true;
 				tMax		= tempRecord.T;
-				record		 = tempRecord;
+				record		= tempRecord;
 			}
 		}
 		return hitAnything;
 	}
 
-	__device__ bool HitSphere(uint32_t sphereIndex, const Ray& ray, float tmin, float& closestSoFar, HitRecord& hitRecord) const
+	__device__ bool HitSphere(uint32_t sphereIndex, const Ray& ray, Float tmin, Float& closestSoFar, HitRecord& hitRecord) const
 	{
 		return m_Objects[sphereIndex].Hit(ray, tmin, closestSoFar, hitRecord);
 	}
 
-	//private:
+	// private:
 
-	Sphere* m_Objects;
-	uint32_t   m_Count;
+	Sphere*	 m_Objects;
+	AABB*	 m_AABB;
+	uint32_t m_Count;
 };
 
 //__device__ inline AABB SurroundingBox(const AABB& box0, const AABB& box1)

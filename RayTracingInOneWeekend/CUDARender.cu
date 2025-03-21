@@ -1,27 +1,9 @@
 #include "pch.cuh"
-
-#include <cuda_runtime.h>
-#include <future>
-#include <cuda.h>
-#include "CudaRenderer.cuh"
-
-#include <curand_kernel.h>
-#include <mutex>
-
 #include "BVH.h"
-#include "CudaCamera.cuh"
-#include "Debug.h"
 #include "HittableList.h"
-#include "Random.h"
 #include "Material.h"
 #include "Sphere.h"
-
-__device__ glm::vec3* MaterialSoA::Albedo		  = nullptr;
-__device__ float*	  MaterialSoA::Fuzz			  = nullptr;
-__device__ float*	  MaterialSoA::Ior			  = nullptr;
-__device__ uint32_t*  MaterialSoA::MaterialFlagsX = nullptr;
-__device__ uint32_t*  MaterialSoA::MaterialFlagsY = nullptr;
-__device__ uint32_t*  MaterialSoA::MaterialFlagsZ = nullptr;
+#include "Random.h"
 
 #define RND (curand_uniform(&local_rand_state))
 
@@ -29,10 +11,10 @@ __host__ void check_cuda(cudaError_t result, char const* const func, const char*
 {
 	if (result)
 	{
-		std::cerr << "CUDA error = " << cudaGetErrorString(result) << " at " << file << ":" << line << " '" << func << "' \n";
+		printf("CUDA error = %s at %s:%d '%s' \n", cudaGetErrorString(result), file, line, func);
 		// Make sure we call CUDA Device Reset before exiting
 		cudaDeviceReset();
-		// exit(99);
+		exit(99);
 	}
 }
 
@@ -60,16 +42,16 @@ __global__ void render_init(uint32_t max_x, uint32_t max_y, uint32_t* rand_state
 	rand_state[pixel_index] = pcg_hash(1984 + pixel_index);
 }
 
-__global__ void create_world(HittableList* d_list, /*Material* d_materials,*/ BVHSoA* d_world, int nx, int ny, curandState* rand_state)
+__global__ void create_world(HittableList* d_list, Materials* d_materials, BVHSoA* d_world, int nx, int ny, curandState* rand_state)
 {
 	if (threadIdx.x == 0 && blockIdx.x == 0)
 	{
 		curandState local_rand_state = *rand_state;
 		uint16_t	i				 = 0;
 
-		Materials::Add(MaterialType::Lambert, glm::vec3(0.5f, 0.5f, 0.5f), 0.0f, 1.0f, i);
+		d_materials->Add(MaterialType::Lambert, Vec3(0.5f, 0.5f, 0.5f), 0.0f, 1.0f);
 		// Ground sphere:
-		new (&d_list->m_Objects[i]) Sphere(glm::vec3(0, -1000.0f, -1), 1000.0f, i);
+		new (&d_list->m_Objects[i]) Sphere(Vec3(0, -1000.0f, -1), 1000.0f, i);
 		i++;
 
 		// For each grid position:
@@ -77,23 +59,23 @@ __global__ void create_world(HittableList* d_list, /*Material* d_materials,*/ BV
 		{
 			for (int b = -11; b < 11; b++)
 			{
-				float	  choose_mat = RND;
-				glm::vec3 center(a + RND, 0.2f, b + RND);
-				if (choose_mat < 0.8f)
+				Float choose_mat = RND;
+				Vec3  center(a + RND, 0.2f, b + RND);
+				if (choose_mat < __float2half(0.8f))
 				{
-					Materials::Add(MaterialType::Lambert, glm::vec3(RND * RND, RND * RND, RND * RND), 0.0f, 1.0f, i);
+					d_materials->Add(MaterialType::Lambert, Vec3(RND * RND, RND * RND, RND * RND), 0.0f, 1.0f);
 					new (&d_list->m_Objects[i]) Sphere(center, 0.2f, i);
 					i++;
 				}
-				else if (choose_mat < 0.95f)
+				else if (choose_mat < __float2half(0.95f))
 				{
-					Materials::Add(MaterialType::Metal, glm::vec3(0.5f * (1 + RND), 0.5f * (1 + RND), 0.5f * (1 + RND)), 0.5f * RND, 1.0f, i);
+					d_materials->Add(MaterialType::Metal, Vec3(0.5f * (1 + RND), 0.5f * (1 + RND), 0.5f * (1 + RND)), 0.5f * RND, 1.0f);
 					new (&d_list->m_Objects[i]) Sphere(center, 0.2f, i);
 					i++;
 				}
 				else
 				{
-					Materials::Add(MaterialType::Dielectric, glm::vec3(1.0), 0.0f, 1.5f, i);
+					d_materials->Add(MaterialType::Dielectric, Vec3(1.0), 0.0f, 1.5f);
 					new (&d_list->m_Objects[i]) Sphere(center, 0.2f, i);
 					i++;
 				}
@@ -101,16 +83,18 @@ __global__ void create_world(HittableList* d_list, /*Material* d_materials,*/ BV
 		}
 
 		// Add the three big spheres:
-		Materials::Add(MaterialType::Dielectric, glm::vec3(1.0), 0.0f, 1.5f, i);
-		new (&d_list->m_Objects[i]) Sphere(glm::vec3(0, 1, 0), 1.0f, i);
+		d_materials->Add(MaterialType::Dielectric, Vec3(1.0), 0.0f, 1.5f);
+		new (&d_list->m_Objects[i]) Sphere(Vec3(0, 1, 0), 1.0f, i);
 		i++;
-		Materials::Add(MaterialType::Lambert, glm::vec3(0.4f, 0.2f, 0.1f), 0.0f, 1.0f, i);
-		new (&d_list->m_Objects[i]) Sphere(glm::vec3(-4, 1, 0), 1.0f, i);
+		d_materials->Add(MaterialType::Lambert, Vec3(0.4f, 0.2f, 0.1f), 0.0f, 1.0f);
+		new (&d_list->m_Objects[i]) Sphere(Vec3(-4, 1, 0), 1.0f, i);
 		i++;
 
-		Materials::Add(MaterialType::Metal, glm::vec3(0.7f, 0.6f, 0.5f), 0.0f, 1.0f, i);
-		new (&d_list->m_Objects[i]) Sphere(glm::vec3(4, 1, 0), 1.0f, i);
+		d_materials->Add(MaterialType::Metal, Vec3(0.7f, 0.6f, 0.5f), 0.0f, 1.0f);
+		new (&d_list->m_Objects[i]) Sphere(Vec3(4, 1, 0), 1.0f, i);
 		i++;
+
+		d_list->SetAABBs();
 
 		*rand_state = local_rand_state;
 
@@ -128,16 +112,10 @@ __global__ void create_world(HittableList* d_list, /*Material* d_materials,*/ BV
 	}
 }
 
-//__device__ vec3 unit_vector(const vec3& v)
-//{
-//	float length = sqrtf(v.x() * v.x() + v.y() * v.y() + v.z() * v.z());
-//	return vec3(v.x() / length, v.y() / length, v.z() / length);
-//}
-
-__device__ glm::vec3 RayColor(Ray& ray, BVHSoA* __restrict__ world, HittableList* __restrict__ list, const uint32_t depth, uint32_t& randSeed)
+__device__ Vec3 RayColor(Ray& ray, BVHSoA* __restrict__ world, HittableList* __restrict__ list, Materials* __restrict__ materials, const uint32_t depth, uint32_t& randSeed)
 {
-	glm::vec3 cur_attenuation(1.0f);
-	Ray		  current_ray = ray;
+	Vec3 cur_attenuation(1.0f);
+	Ray	 current_ray = ray;
 
 	for (uint32_t i = 0; i < depth; i++)
 	{
@@ -146,28 +124,28 @@ __device__ glm::vec3 RayColor(Ray& ray, BVHSoA* __restrict__ world, HittableList
 		if (!world->TraverseBVH_SoA(current_ray, 0.001f, FLT_MAX, list, world->root, rec))
 		{
 			// Sky color calculation
-			glm::vec3 unit_direction = current_ray.Direction();
-			//float	  inv_length	 = rsqrtf(unit_direction.x * unit_direction.x + unit_direction.y * unit_direction.y + unit_direction.z * unit_direction.z);
-			//glm::vec3 unit_direction = unit_direction * inv_length;
+			Vec3 unit_direction = current_ray.Direction();
+			// Float	  inv_length	 = rsqrtf(unit_direction.x * unit_direction.x + unit_direction.y * unit_direction.y + unit_direction.z * unit_direction.z);
+			// Vec3 unit_direction = unit_direction * inv_length;
 
-			float	  t				 = 0.5f * (unit_direction.y + 1.0f);
-			glm::vec3 sky_color		 = (1.0f - t) * glm::vec3(1.0) + t * glm::vec3(0.5f, 0.7f, 1.0f);
+			Float t			= (__float2half(0.5f)) * (unit_direction.y + __float2half(1.0f));
+			Vec3  sky_color = (__float2half(1.0f) - t) * Vec3(1.0) + t * Vec3(0.5f, 0.7f, 1.0f);
 			return cur_attenuation * sky_color;
 		}
 
 		// Russian Roulette for path termination
-		if (i > 3)
+		// if (i > 3)
 		{
-			float rrProb = fmaxf(cur_attenuation.x, fmaxf(cur_attenuation.y, cur_attenuation.z));
+			Float rrProb = glm::hmax(cur_attenuation.x, glm::hmax(cur_attenuation.y, cur_attenuation.z));
 			if (RandomFloat(randSeed) > rrProb)
 				break;
 			cur_attenuation /= rrProb;
 		}
 
 		// Scatter ray with optimized material interaction
-		Ray		  scattered_ray;
-		glm::vec3 attenuation {1.0f};
-		if (!Material::Scatter(current_ray, scattered_ray, rec, attenuation, randSeed, rec.MaterialIndex))
+		Ray	 scattered_ray;
+		Vec3 attenuation {1.0f};
+		if (!materials->Scatter(current_ray, scattered_ray, rec, attenuation, randSeed))
 			break;
 
 		// Update attenuation and current ray
@@ -179,10 +157,10 @@ __device__ glm::vec3 RayColor(Ray& ray, BVHSoA* __restrict__ world, HittableList
 			break;
 	}
 
-	return glm::vec3(0.0f); // Exceeded Max depth
+	return Vec3(0.0f); // Exceeded Max depth
 }
 
-__global__ void InternalRender(glm::vec3* __restrict__ fb, BVHSoA* __restrict__ world, HittableList* list /*, Material* d_materials*/, uint32_t max_x, uint32_t max_y, Camera* camera, uint32_t samplersPerPixel, float colorMul, uint32_t maxDepth, uint32_t* randSeeds)
+__global__ void InternalRender(glm::vec<4, sf::Uint8, glm::packed_lowp>* __restrict__ fb, BVHSoA* __restrict__ world, HittableList* __restrict__ list, Materials* __restrict__ materials, uint32_t max_x, uint32_t max_y, Camera* camera, uint32_t samplersPerPixel, Float colorMul, uint32_t maxDepth, uint32_t* randSeeds)
 {
 	uint32_t i = threadIdx.x + blockIdx.x * blockDim.x;
 	uint32_t j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -191,22 +169,22 @@ __global__ void InternalRender(glm::vec3* __restrict__ fb, BVHSoA* __restrict__ 
 
 	uint32_t pixel_index = j * max_x + i;
 
-	uint32_t  seed = randSeeds[pixel_index];
-	glm::vec3 pixel_color(0.0f);
+	uint32_t seed = randSeeds[pixel_index];
+	Vec3	 pixel_color(0.0f);
 	for (uint32_t s = 0; s < samplersPerPixel; s++)
 	{
-		float u = float(float(i) + RandomFloat(seed)) / float(max_x);
-		float v = float(float(j) + RandomFloat(seed)) / float(max_y);
+		Float u = Float(Float(i) + RandomFloat(seed)) / Float(max_x);
+		Float v = Float(Float(j) + RandomFloat(seed)) / Float(max_y);
 		// u		 = 1.0f - u;
-		v		 = 1.0f - v;
+		v		 = __float2half(1.0f) - v;
 		auto ray = camera->GetRay(u, v);
 
-		pixel_color += RayColor(ray, world, list /*, d_materials*/, maxDepth, seed);
+		pixel_color += RayColor(ray, world, list, materials, maxDepth, seed);
 	}
 	randSeeds[pixel_index] = seed;
 	pixel_color *= colorMul;
 	pixel_color		= glm::sqrt(pixel_color);
-	fb[pixel_index] = pixel_color;
+	fb[pixel_index] = glm::vec<4, sf::Uint8, glm::packed_lowp>(pixel_color.x * __float2half(255.f), pixel_color.y * __float2half(255.f), pixel_color.z * __float2half(255.f), 255);
 }
 
 __host__ void CudaRenderer::Init()
@@ -218,16 +196,28 @@ __host__ void CudaRenderer::Init()
 	CHECK_CUDA_ERRORS(cudaMalloc((void**)&d_rand_state2, 1 * sizeof(curandState)));
 
 	constexpr int numHitables = 22 * 22 + 1 + 3;
-	CHECK_CUDA_ERRORS(cudaMallocManaged((void**)&d_list, sizeof(HittableList)));
-	CHECK_CUDA_ERRORS(cudaMallocManaged((void**)&d_list->m_Objects, numHitables * sizeof(Sphere)));
-	d_list->m_Count = numHitables;
-	// CHECK_CUDA_ERRORS(cudaMallocManaged((void**)&d_materials, numHitables * sizeof(Material)));
-	// CHECK_CUDA_ERRORS(cudaMalloc((void**)&d_world, sizeof(BVHSoA)));
+
+	// Allocate memory for the HittableList struct in device memory
+	CHECK_CUDA_ERRORS(cudaMalloc((void**)&d_list, sizeof(HittableList)));
+
+	// Allocate memory for the objects array inside HittableList
+	void* tempObjects;
+	void* tempAABBs;
+	CHECK_CUDA_ERRORS(cudaMalloc(&tempObjects, numHitables * sizeof(Sphere)));
+	CHECK_CUDA_ERRORS(cudaMalloc(&tempAABBs, numHitables * sizeof(AABB)));
+
+	// Copy the device pointer for objects into d_list->m_Objects
+	CHECK_CUDA_ERRORS(cudaMemcpy(&(d_list->m_Objects), &tempObjects, sizeof(Sphere*), cudaMemcpyHostToDevice));
+	CHECK_CUDA_ERRORS(cudaMemcpy(&(d_list->m_AABB), &tempAABBs, sizeof(AABB*), cudaMemcpyHostToDevice));
+
+	// Copy the hitable count to the device
+	CHECK_CUDA_ERRORS(cudaMemcpy(&(d_list->m_Count), &numHitables, sizeof(int), cudaMemcpyHostToDevice));
 
 	BVHSoA::Init(d_world, numHitables * 2 - 1);
+	Materials::Init(d_materials, numHitables);
 
 	CHECK_CUDA_ERRORS(cudaMalloc((void**)&d_camera, sizeof(Camera)));
-	MaterialSoA::Init(numHitables);
+	// MaterialSoA::Init(numHitables);
 
 	rand_init<<<1, 1>>>(d_rand_state2);
 	CHECK_CUDA_ERRORS(cudaGetLastError());
@@ -241,7 +231,7 @@ __host__ void CudaRenderer::Init()
 	CHECK_CUDA_ERRORS(cudaGetLastError());
 	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 
-	create_world<<<1, 1>>>(d_list /*, d_materials*/, d_world, m_Width, m_Height, d_rand_state2);
+	create_world<<<1, 1>>>(d_list, d_materials, d_world, m_Width, m_Height, d_rand_state2);
 	CHECK_CUDA_ERRORS(cudaGetLastError());
 	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 
@@ -254,35 +244,27 @@ __host__ void CudaRenderer::Render() const
 	dim3 grid((m_Width + block.x - 1) / block.x,
 			  (m_Height + block.y - 1) / block.y);
 
-	float aspectRatio = float(m_Width) / float(m_Height);
+	Float aspectRatio = Float(m_Width) / Float(m_Height);
 
-	static float distance = 0.0f;
-	Camera		 camera(glm::vec3(13.0f + distance, 2.0f, 3.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), 20.0f, aspectRatio);
+	static Float distance = 0.0f;
+	Camera		 camera(Vec3(__float2half(13.0f) + distance, 2.0f, 3.0f), Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), 20.0f, aspectRatio);
 
 	CHECK_CUDA_ERRORS(cudaMemcpy(d_camera, &camera, sizeof(Camera), cudaMemcpyHostToDevice));
 	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 	// distance += 0.1f;
 
-	if (distance > 10.0f)
+	if (distance > __float2half(10.0f))
 		distance = 0.0f;
 
 	const clock_t start = clock();
 	// Render our buffer
-	InternalRender<<<grid, block>>>(d_Image, d_world, d_list /*, d_materials*/, m_Width, m_Height, d_camera, m_SamplesPerPixel, m_ColorMul, m_MaxDepth, d_rand_seeds);
+	InternalRender<<<grid, block>>>(d_Image, d_world, d_list, d_materials, m_Width, m_Height, d_camera, m_SamplesPerPixel, m_ColorMul, m_MaxDepth, d_rand_seeds);
 	CHECK_CUDA_ERRORS(cudaGetLastError());
 	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 
 	const clock_t stop		   = clock();
 	const double  timerSeconds = stop - start;
 	std::cerr << "took " << timerSeconds << "ms.\n";
-}
-
-__host__ std::vector<float> CudaRenderer::CopyImage()
-{
-	std::vector<float> h_Pixels(m_Width * m_Height * 3 * sizeof(float));
-	cudaMemcpy(h_Pixels.data(), d_Image, h_Pixels.size(), cudaMemcpyDeviceToHost);
-
-	return h_Pixels;
 }
 
 CudaRenderer::~CudaRenderer()

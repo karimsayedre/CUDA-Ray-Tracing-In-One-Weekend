@@ -132,7 +132,7 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <AdditionalCompilerOptions>
       </AdditionalCompilerOptions>
-      <Defines>__CUDACC_VER_MAJOR__=12;GLM_FORCE_CUDA;GLM_ENABLE_EXPERIMENTAL;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT;GLM_FORCE_XYZW_ONLY</Defines>
+      <Defines>__CUDACC__=12.8;__CUDACC_VER_MAJOR__=12;__CUDACC_VER_MINOR__=8;GLM_FORCE_CUDA;GLM_ENABLE_EXPERIMENTAL;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT;GLM_FORCE_XYZW_ONLY</Defines>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
       <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr -Xptxas=-v</AdditionalOptions>
       <PtxAsOptionV>false</PtxAsOptionV>
@@ -172,7 +172,7 @@
       <HostDebugInfo>true</HostDebugInfo>
       <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr -Xptxas=-v</AdditionalOptions>
       <InterleaveSourceInPTX>true</InterleaveSourceInPTX>
-      <MaxRegCount>64</MaxRegCount>
+      <MaxRegCount>0</MaxRegCount>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -219,6 +219,9 @@
     <CudaCompile Include="CUDARender.cu">
       <FileType>Document</FileType>
     </CudaCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="cpp.hint" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

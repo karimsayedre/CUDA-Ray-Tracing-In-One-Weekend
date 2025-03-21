@@ -5,7 +5,7 @@
 #include <iostream>
 #include <fmt/chrono.h>
 #include <SFML/Graphics.hpp>
-//#include "Camera.h"
+// #include "Camera.h"
 #include "CudaRenderer.cuh"
 #include "Log.h"
 
@@ -21,7 +21,7 @@ sf::Image Renderer::Render(const uint32_t width, const uint32_t height)
 	// HittableList world = RandomScene();
 
 	// Camera
-	//Camera camera(vec3(13.0f, 2.0f, 3.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f), 20.0f, aspectRatio);
+	// Camera camera(vec3(13.0f, 2.0f, 3.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f), 20.0f, aspectRatio);
 
 	std::atomic_bool isRunning = true;
 
@@ -124,32 +124,19 @@ sf::Image Renderer::Render(const uint32_t width, const uint32_t height)
 
 	CudaRenderer cudaRenderer(width, height, samplesPerPixel, maxDepth, colorMul);
 	cudaRenderer.Init();
+	// std::vector<float> pixels(width * height * 3 * sizeof(float));
 	while (isRunning)
 	{
 		cudaRenderer.Render();
 
-		const std::vector pixels = cudaRenderer.CopyImage();
-
-		for (uint32_t y = 0; y < height; ++y)
-		{
-			for (uint32_t x = 0; x < width; ++x)
-			{
-				uint32_t  index = y * width + x;
-				sf::Color color;
-				color.r = static_cast<uint8_t>(pixels[index * 3] * 255.0f);
-				color.g = static_cast<uint8_t>(pixels[index * 3 + 1] * 255.0f);
-				color.b = static_cast<uint8_t>(pixels[index * 3 + 2] * 255.0f);
-				color.a = 255;
-				image.setPixel(x, y, color);
-			}
-		}
+		cudaMemcpy((void*)image.getPixelsPtr(), cudaRenderer.GetImage(), width * height * 4 * sizeof(sf::Uint8), cudaMemcpyDeviceToHost);
 		// Notify the OpenGL thread a new frame is ready:
 		{
-			std::lock_guard<std::mutex> lock(frameMutex);
+			std::lock_guard<std::mutex> lock(frameMutex); 
 			frameReady = true;
 		}
 		frameCV.notify_one();
-		//isRunning = false;
+		// isRunning = false;
 	}
 
 	OpenGLThread.wait();

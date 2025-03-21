@@ -5,13 +5,12 @@
 class Sphere;
 class HittableList;
 class BVHNode;
-class Material;
 
 struct HitRecord
 {
-	glm::vec3 Location;
+	Vec3 Location;
 	Float	  T;
-	glm::vec3 Normal;
+	Vec3 Normal;
 	uint16_t  MaterialIndex;
 	// bool			FrontFace;
 	//__device__ void SetFaceNormal(const Ray& ray, const vec3& outwardNormal)

@@ -1,19 +1,5 @@
 #pragma once
-#include <limits>
-#include <math.h>
-#include <stdlib.h>
-#include <iostream>
-#include <cuda_runtime.h>
-#include <glm/gtx/fast_square_root.hpp>
-#include <cmath>
 
-
-using Float				 = float;
-constexpr Float Infinity = std::numeric_limits<Float>::infinity();
-constexpr Float Pi		 = 3.1415926535897932385f;
-// #define CUDART_INF_F (float)(0x7f800000)
-
-constexpr float CUDART_INF_F = std::numeric_limits<float>::infinity();
 
 #if 0
 class vec3
@@ -272,24 +258,24 @@ __device__ inline float custom_rsqrtf(float x)
 #endif
 }
 
-//__device__ inline glm::vec3 unit_vector(const glm::vec3& v)
+//__device__ inline Vec3 unit_vector(const Vec3& v)
 //{
 //	float invLen = glm::fastInverseSqrt(glm::dot(v, v));
 //	return {v.x * invLen, v.y * invLen, v.z * invLen, };
 //}
 
-__device__ inline glm::vec3 reflect(const glm::vec3& v, const glm::vec3& n)
+__device__ inline Vec3 reflect(const Vec3& v, const Vec3& n)
 {
-	return v - 2.f * glm::dot(v, n) * n;
+	return v - __float2half(2.0f) * glm::dot(v, n) * n;
 }
 
-__device__ inline bool refract(const glm::vec3& v, const glm::vec3& n, float niOverNt, glm::vec3& outRefracted)
+__device__ inline bool refract(const Vec3& v, const Vec3& n, Float niOverNt, Vec3& outRefracted)
 {
-	float dt		   = dot(v, n);
-	float discriminant = 1.f - niOverNt * niOverNt * (1.f - dt * dt);
-	if (discriminant > 0.f)
+	Float dt		   = dot(v, n);
+	Float discriminant = __float2half(1.f) - niOverNt * niOverNt * (__float2half(1.f) - dt * dt);
+	if (discriminant > __float2half(0.0f))
 	{
-		outRefracted = niOverNt * (v - n * dt) - n * sqrtf(discriminant);
+		outRefracted = niOverNt * (v - n * dt) - n * glm::sqrt(discriminant);
 		return true;
 	}
 	return false;
@@ -302,14 +288,14 @@ __device__ inline float Reflectance(float cosine, float refIdx)
 	r0		 = r0 * r0;
 	return r0 + (1.f - r0) * powf((1.f - cosine), 5.f);
 }
-__device__ inline float fastLength(const glm::vec3& v)
+__device__ inline float fastLength(const Vec3& v)
 {
 	// Approximate length using rsqrtf
 	float lenSq = dot(v, v);
 	return lenSq > 0.f ? lenSq * custom_rsqrtf(lenSq) : 0.f;
 }
 
-//__host__ __device__ inline glm::vec3 make_unit_vector(glm::vec3 e)
+//__host__ __device__ inline Vec3 make_unit_vector(Vec3 e)
 //{
 //	float k = 1.0f / sqrt(e.x * e.x + e.y * e.y + e.z * e.z);
 //	e.x *= k;
@@ -317,7 +303,6 @@ __device__ inline float fastLength(const glm::vec3& v)
 //	e.z *= k;
 //	return {e.x, e.y, e.z};
 //}
-
 
 namespace math
 {
@@ -329,12 +314,10 @@ namespace math
 				   : SqrtNewtonRaphson(x, (Float)0.5 * (current + x / current), current);
 	}
 
-	__device__ constexpr Float Sqrt(const Float x) noexcept
-	{
-		return x >= 0 && x < CUDART_INF_F
-				   ? SqrtNewtonRaphson(x, x, 0)
-				   : CUDART_INF_F / CUDART_INF_F; // IEEE-754: NaN
-	}
+	//__device__ constexpr Float Sqrt(const Float x) noexcept
+	//{
+	//	return x >= 0.0f && x < CUDART_INF_F ? SqrtNewtonRaphson(x, x, 0) : CUDART_INF_F / CUDART_INF_F; // IEEE-754: NaN
+	//}
 
 	//__device__ inline bool NearZero(const vec3& v) noexcept
 	//{

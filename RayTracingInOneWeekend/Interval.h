@@ -20,7 +20,7 @@ class Interval
 	}
 
 	__device__ Interval(const Interval& a, const Interval& b)
-		: min(glm::min(a.min, b.min)), max(glm::max(a.max, b.max))
+		: min(glm::hmin(a.min, b.min)), max(glm::hmax(a.max, b.max))
 	{
 	}
 
@@ -29,11 +29,11 @@ class Interval
 		return max - min;
 	}
 
-	__device__ [[nodiscard]] Interval Expand(Float delta) const
-	{
-		auto padding = delta / 2;
-		return {min - padding, max + padding};
-	}
+	//__device__ [[nodiscard]] Interval Expand(Float delta) const
+	//{
+	//	auto padding = delta / 2;
+	//	return {min - padding, max + padding};
+	//}
 
 	__device__ [[nodiscard]] bool Contains(Float x) const
 	{
@@ -54,9 +54,9 @@ class Interval
 		return x;
 	}
 
-	__device__ [[nodiscard]] float Center() const
+	__device__ [[nodiscard]] Float Center() const
 	{
-		return 0.5f * (min + max);
+		return __float2half(0.5f) * (min + max);
 	}
 
 	static const Interval empty;
