@@ -22,7 +22,7 @@ struct HittableList
 		CHECK_CUDA_ERRORS(cudaMemcpy(d_hittableList, &h_HittableList, sizeof(HittableList), cudaMemcpyHostToDevice));
 	}
 
-	__device__ bool Hit(const Ray& ray, const Float tMin, Float tMax, HitRecord& record, uint32_t sphereIndex) const
+	__device__ bool Hit(const Ray& ray, const Float tMin, Float& tMax, HitRecord& record, uint32_t sphereIndex) const
 	{
 		Vec3  oc		   = ray.Origin() - m_Center[sphereIndex];
 		Float a			   = dot(ray.Direction(), ray.Direction());
@@ -31,7 +31,7 @@ struct HittableList
 		Float discriminant = b * b - a * c;
 
 		if (discriminant <= 0.0f)
-			return false; // No intersection
+			return false; // No intersection 
 
 		Float sqrtD = sqrtf(discriminant);
 		Float t0	= (-b - sqrtD) / a;

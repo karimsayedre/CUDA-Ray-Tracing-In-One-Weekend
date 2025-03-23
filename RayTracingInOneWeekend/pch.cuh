@@ -16,6 +16,8 @@
 #include <thrust/sort.h>
 
 #include <cuda_fp16.h>
+#include "surface_functions.h"
+#include <cuda_surface_types.h>
 #include <math.h>
 
 
@@ -40,6 +42,62 @@ inline Float	Pi		 = __float2half(3.1415926535897932385f);
 constexpr float CUDART_INF_F = std::numeric_limits<float>::infinity();
 
 using Vec3 = glm::vec<3, Float, glm::packed_mediump>;
+
+// Boolean multiplication operators for branchless selection
+
+// Vec3 * bool (select vector based on condition)
+__device__ __forceinline__ Vec3 operator*(const Vec3& v, const bool condition)
+{
+	// Convert bool to Float (0.0 or 1.0)
+	// Using __float2half to convert to half precision if needed
+	Float factor = condition ? __float2half(1.0f) : __float2half(0.0f);
+	return Vec3(v.x * factor, v.y * factor, v.z * factor);
+}
+
+// bool * Vec3 (commutative version)
+__device__ __forceinline__ Vec3 operator*(const bool condition, const Vec3& v)
+{
+	Float factor = condition ? __float2half(1.0f) : __float2half(0.0f);
+	return Vec3(v.x * factor, v.y * factor, v.z * factor);
+}
+
+//// Float * bool (scalar selection)
+//__device__ __forceinline__ Float operator*(const Float value, const bool condition)
+//{
+//	return condition ? value : __float2half(0.0f);
+//}
+//
+//// bool * Float (commutative version)
+//__device__ __forceinline__ Float operator*(const bool condition, const Float value)
+//{
+//	return condition ? value : __float2half(0.0f);
+//}
+
+// Faster version for selection using direct bit manipulation (if needed)
+__device__ __forceinline__ Vec3 selectVec3(const Vec3& v, const bool condition)
+{
+	// Create a mask from the boolean (all 1s or all 0s)
+	// This assumes 16-bit half precision floats
+	const uint16_t mask = condition ? 0xFFFF : 0x0000;
+
+	// Use bitwise AND to apply the mask
+	return Vec3(
+		__half_as_ushort(v.x) & mask ? v.x : __float2half(0.0f),
+		__half_as_ushort(v.y) & mask ? v.y : __float2half(0.0f),
+		__half_as_ushort(v.z) & mask ? v.z : __float2half(0.0f));
+}
+
+// Vec3 selection between two vectors based on condition
+__device__ __forceinline__ Vec3 selectVec3(const Vec3& whenTrue, const Vec3& whenFalse, const bool condition)
+{
+	return condition ? whenTrue : whenFalse;
+}
+
+// Float selection between two values based on condition
+__device__ __forceinline__ Float selectFloat(const Float whenTrue, const Float whenFalse, const bool condition)
+{
+	return condition ? whenTrue : whenFalse;
+}
 
 namespace glm
 {

@@ -31,7 +31,6 @@ class CudaRenderer
 	__host__ CudaRenderer(const uint32_t width, const uint32_t height, const uint32_t samplesPerPixel, const uint32_t maxDepth, const float colorMul)
 		: m_Width(width), m_Height(height), m_SamplesPerPixel(samplesPerPixel), m_MaxDepth(maxDepth), m_ColorMul(colorMul)
 	{
-		CHECK_CUDA_ERRORS(cudaMalloc(&d_Image, m_Width * m_Height * sizeof(float3)));
 	}
 
 	__host__ void Init();
@@ -59,5 +58,5 @@ class CudaRenderer
 	uint32_t						   m_SamplesPerPixel;
 	uint32_t						   m_MaxDepth;
 	float							   m_ColorMul;
-	glm::vec<4, sf::Uint8, glm::lowp>* d_Image;
+	cudaSurfaceObject_t				   d_Image;
 };

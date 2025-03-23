@@ -16,9 +16,10 @@ struct Materials
 	Vec3*	  Albedo;
 	Float*	  Fuzz;
 	Float*	  Ior;
-	uint32_t* MaterialFlagsX;
-	uint32_t* MaterialFlagsY;
-	uint32_t* MaterialFlagsZ;
+	Vec3*	  Flags;
+	//Float* MaterialFlagsX;
+	//Float* MaterialFlagsY;
+	//Float* MaterialFlagsZ;
 
 	uint32_t Count = 0;
 
@@ -28,9 +29,10 @@ struct Materials
 		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.Albedo, maxMaterialCount * sizeof(Vec3)));
 		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.Fuzz, maxMaterialCount * sizeof(Float)));
 		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.Ior, maxMaterialCount * sizeof(Float)));
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.MaterialFlagsX, maxMaterialCount * sizeof(uint32_t)));
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.MaterialFlagsY, maxMaterialCount * sizeof(uint32_t)));
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.MaterialFlagsZ, maxMaterialCount * sizeof(uint32_t)));
+		//CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.MaterialFlagsX, maxMaterialCount * sizeof(Float)));
+		//CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.MaterialFlagsY, maxMaterialCount * sizeof(Float)));
+		//CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.MaterialFlagsZ, maxMaterialCount * sizeof(Float)));
+		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.Flags, maxMaterialCount * sizeof(Vec3)));
 
 		// Allocate memory for BVH structure on the device
 		CHECK_CUDA_ERRORS(cudaMalloc(&d_materials, sizeof(Materials)));
@@ -49,91 +51,75 @@ struct Materials
 		switch (type)
 		{
 			case MaterialType::Lambert:
-				MaterialFlagsX[Count] = 1;
-				MaterialFlagsY[Count] = 0;
-				MaterialFlagsZ[Count] = 0;
+				Flags[Count].x = 1;
+				Flags[Count].y = 0;
+				Flags[Count].z = 0;
 				break;
 			case MaterialType::Metal:
-				MaterialFlagsX[Count] = 0;
-				MaterialFlagsY[Count] = 1;
-				MaterialFlagsZ[Count] = 0;
+				Flags[Count].x = 0;
+				Flags[Count].y = 1;
+				Flags[Count].z = 0;
 				break;
 			case MaterialType::Dielectric:
-				MaterialFlagsX[Count] = 0;
-				MaterialFlagsY[Count] = 0;
-				MaterialFlagsZ[Count] = 1;
+				Flags[Count].x = 0;
+				Flags[Count].y = 0;
+				Flags[Count].z = 1;
 				break;
 		}
 		Count++;
 	}
 
-	__device__ bool Scatter(Ray& incomingRay, Ray& scatteredRay, const HitRecord& rec, Vec3& attenuation, uint32_t& randSeed) const
+	__device__ __noinline__ bool Scatter(Ray& incomingRay, const HitRecord& rec, Vec3& currAttenuation, uint32_t& randSeed) const
 	{
-		// Normalize direction (branchless)
-		const Vec3	rayDir		   = incomingRay.Direction();
-		const Float rayDirLen	   = fastLength(rayDir);
-		const Float rayDirLenRecip = rayDirLen > __float2half(0.0001f) ? __float2half(1.0f) / rayDirLen : __float2half(1.0f);
-		const Vec3	unitDir		   = rayDir * rayDirLenRecip;
+		// 1. Compute normalized direction with minimal temporaries
+		const Vec3& rayDir = incomingRay.Direction();
 
-		// Normal based on surface face
-		const Float dotRayNormal  = dot(unitDir, rec.Normal);
-		const bool	frontFace	  = dotRayNormal < __float2half(0.0f);
-		const Vec3	outwardNormal = frontFace ? rec.Normal : -rec.Normal;
+		// 2. Compute normal and face orientation in one step
 
-		// Calculate scattered directions for all types
+		// 3. Get one random vector for all calculations
 		const Vec3 randomVec = RandomVec3(randSeed);
 
-		// Lambert scattering direction
+		// 4. Lambert direction - immediate computation
 		Vec3		lambertDir	  = rec.Normal + randomVec;
 		const Float lambertDirLen = glm::length(lambertDir);
 		lambertDir				  = lambertDirLen > __float2half(0.001f) ? lambertDir / lambertDirLen : rec.Normal;
 
-		// Metal reflection direction
-		const Vec3 reflected = reflect(unitDir, rec.Normal);
+		// 5. Metal direction - immediate computation
+		const Vec3 reflected = reflect(rayDir, rec.Normal);
 		const Vec3 metalDir	 = reflected + randomVec * Fuzz[rec.MaterialIndex];
 
-		// Dielectric refraction/reflection
-		Float		ior		 = Ior[rec.MaterialIndex];
-		const Float niOverNt = frontFace ? (__float2half(1.0f) / ior) : ior;
-		const Float cosine	 = frontFace ? -dotRayNormal : dotRayNormal;
+		// 6. Dielectric direction - computation with reused variables
+		Vec3 dielectricDir;
+		{
+			const Float ior			  = Ior[rec.MaterialIndex];
+			const Float dotRayNormal  = dot(rayDir, rec.Normal);
+			const bool	frontFace	  = dotRayNormal < __float2half(0.0f);
+			const Vec3& outwardNormal = frontFace ? rec.Normal : -rec.Normal;
+			const Float niOverNt	  = frontFace ? (__float2half(1.0f) / ior) : ior;
+			const Float cosine		  = frontFace ? -dotRayNormal : dotRayNormal;
 
-		Vec3		refracted;
-		const bool	canRefract	  = refract(unitDir, outwardNormal, niOverNt, refracted);
-		const Float reflectProb	  = canRefract ? Reflectance(cosine, ior) : 1.0f;
-		const Float randVal		  = RandomFloat(randSeed);
-		const Vec3	dielectricDir = (randVal < reflectProb) ? reflect(unitDir, outwardNormal) : refracted;
+			Vec3		refracted;
+			const bool	canRefract	 = refract(rayDir, outwardNormal, niOverNt, refracted);
+			const Float reflectProb	 = canRefract ? Reflectance(cosine, ior) : __float2half(1.0f);
+			const Vec3	reflectedDir = reflect(rayDir, outwardNormal);
+			dielectricDir			 = (RandomFloat(randSeed) < reflectProb) ? reflectedDir : refracted;
+		}
 
-		// Selection of direction based on material parameters (branchless)
-		// m_MaterialFlags: [0] = Lambert component, [1] = Metal component, [2] = Dielectric component
-		// Values between 0 and 1 allow for blended materials
-		const Float lambertWeight	 = __float2half((Float)MaterialFlagsX[rec.MaterialIndex]);
-		const Float metalWeight		 = __float2half((Float)MaterialFlagsY[rec.MaterialIndex]);
-		const Float dielectricWeight = __float2half((Float)MaterialFlagsZ[rec.MaterialIndex]);
+		// 7. Material weights - compute once
+		const Vec3	flags			 = Flags[rec.MaterialIndex];
+		const Float totalWeight	   = flags.x + flags.y + flags.z;
+		const Float invTotalWeight	 = totalWeight > __float2half(0.0001f) ? __float2half(1.0f) / totalWeight : __float2half(0.0f);
 
-		// Normalize weights to sum to 1.0
-		const Float totalWeight		 = lambertWeight + metalWeight + dielectricWeight;
-		const Float weightNormalizer = totalWeight > __float2half(0.0001f) ? __float2half(1.0f) / totalWeight : __float2half(0.0f);
+		// 8. Blend directions - direct computation with minimal temporaries
+		const Vec3 finalDir = lambertDir * (flags.x * invTotalWeight) + metalDir * (flags.y * invTotalWeight) + dielectricDir * (flags.z * invTotalWeight);
 
-		const Float normLambertWeight	 = lambertWeight * weightNormalizer;
-		const Float normMetalWeight		 = metalWeight * weightNormalizer;
-		const Float normDielectricWeight = dielectricWeight * weightNormalizer;
-
-		// Blend directions
-		Vec3 finalDir =
-			lambertDir * normLambertWeight + metalDir * normMetalWeight + dielectricDir * normDielectricWeight;
-
-		// Ensure direction is normalized
-		finalDir = glm::normalize(finalDir);
-
-		// Calculate if scattering is valid (mainly for metal)
+		// 9. Check valid scatter
 		const Float scatterDot	 = dot(finalDir, rec.Normal);
-		const bool	validScatter = (scatterDot > __float2half(0.0f)) || (dielectricWeight > __float2half(0.0f));
+		const bool	validScatter = (scatterDot > __float2half(0.0f)) || (flags.z > __float2half(0.0f));
 
-		// Apply attenuation based on material properties
-		attenuation *= Albedo[rec.MaterialIndex];
-
-		// Set scattered ray
-		scatteredRay = Ray(rec.Location, finalDir);
+		// 10. Apply attenuation and update ray (no temporaries)
+		currAttenuation *= Albedo[rec.MaterialIndex];
+		incomingRay = {rec.Location, finalDir};
 
 		return validScatter;
 	}

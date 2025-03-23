@@ -96,7 +96,7 @@ __global__ void create_world(HittableList* d_list, Materials* d_materials, BVHSo
 
 		*rand_state = local_rand_state;
 
-		uint32_t* indices = (uint32_t*)malloc(d_list->m_Count * sizeof(uint32_t));
+		uint16_t* indices = (uint16_t*)malloc(d_list->m_Count * sizeof(uint16_t));
 		for (uint32_t index = 0; index < d_list->m_Count; ++index)
 			indices[index] = index;
 
@@ -110,55 +110,46 @@ __global__ void create_world(HittableList* d_list, Materials* d_materials, BVHSo
 	}
 }
 
-__device__ Vec3 RayColor(Ray& ray, BVHSoA* __restrict__ world, HittableList* __restrict__ list, Materials* __restrict__ materials, const uint32_t depth, uint32_t& randSeed)
+__device__ static Vec3 RayColor(Ray& ray, BVHSoA* __restrict__ world, HittableList* __restrict__ list, Materials* __restrict__ materials, const uint32_t depth, uint32_t& randSeed)
 {
 	Vec3 cur_attenuation(1.0f);
-	Ray	 current_ray = ray;
 
 	for (uint32_t i = 0; i < depth; i++)
 	{
 		HitRecord rec;
-		// Use current_ray instead of ray
-		if (!world->TraverseBVH_SoA(current_ray, 0.001f, FLT_MAX, list, world->root, rec))
-		{
-			// Sky color calculation
-			Vec3 unit_direction = current_ray.Direction();
-			// Float	  inv_length	 = rsqrtf(unit_direction.x * unit_direction.x + unit_direction.y * unit_direction.y + unit_direction.z * unit_direction.z);
-			// Vec3 unit_direction = unit_direction * inv_length;
 
-			Float t			= (__float2half(0.5f)) * (unit_direction.y + __float2half(1.0f));
-			Vec3  sky_color = (__float2half(1.0f) - t) * Vec3(1.0) + t * Vec3(0.5f, 0.7f, 1.0f);
-			return cur_attenuation * sky_color;
+		// Early exit with sky color if no hit
+		if (!world->TraverseBVH_SoA(ray, 0.001f, FLT_MAX, list, rec))
+		{
+			// Streamlined sky color calculation
+			const Float t = (__float2half(0.5f)) * (ray.Direction().y + __float2half(1.0f));
+			return cur_attenuation * ((__float2half(1.0f) - t) * 1.0f + t * Vec3(0.5f, 0.7f, 1.0f));
 		}
 
-		// Russian Roulette for path termination
-		// if (i > 3)
-		{
-			Float rrProb = glm::hmax(cur_attenuation.x, glm::hmax(cur_attenuation.y, cur_attenuation.z));
+		// Russian Roulette - simplified
+		// Only apply after a few bounces (commented out in original)
+		/*if (i > 3)*/ {
+			// Use max component for probability
+			const Float rrProb = glm::hmax(cur_attenuation.x, glm::hmax(cur_attenuation.y, cur_attenuation.z));
+
+			// Early termination with zero - saves registers by avoiding division
 			if (RandomFloat(randSeed) > rrProb)
-				break;
+				return Vec3(0.0f);
+
+			// Apply RR adjustment directly to current attenuation
 			cur_attenuation /= rrProb;
 		}
 
-		// Scatter ray with optimized material interaction
-		Ray	 scattered_ray;
-		Vec3 attenuation {1.0f};
-		if (!materials->Scatter(current_ray, scattered_ray, rec, attenuation, randSeed))
-			break;
+		// Early exit on no scatter
+		if (!materials->Scatter(ray, rec, cur_attenuation, randSeed))
+			return Vec3(0.0f);
+	} 
 
-		// Update attenuation and current ray
-		cur_attenuation *= attenuation;
-		current_ray = scattered_ray;
-
-		// Early termination for very low contribution
-		if (fmaxf(cur_attenuation.x, fmaxf(cur_attenuation.y, cur_attenuation.z)) < 0.001f)
-			break;
-	}
-
-	return Vec3(0.0f); // Exceeded Max depth
+	return Vec3(0.0f); // Exceeded max depth
 }
 
-__global__ void InternalRender(glm::vec<4, sf::Uint8, glm::packed_lowp>* __restrict__ fb, BVHSoA* __restrict__ world, HittableList* __restrict__ list, Materials* __restrict__ materials, uint32_t max_x, uint32_t max_y, Camera* camera, uint32_t samplersPerPixel, Float colorMul, uint32_t maxDepth, uint32_t* randSeeds)
+// Modified kernel using surface object
+__global__ void InternalRender(cudaSurfaceObject_t fb, BVHSoA* __restrict__ world, HittableList* __restrict__ list, Materials* __restrict__ materials, uint32_t max_x, uint32_t max_y, Camera* camera, uint32_t samplersPerPixel, Float colorMul, uint32_t maxDepth, uint32_t* randSeeds)
 {
 	uint32_t i = threadIdx.x + blockIdx.x * blockDim.x;
 	uint32_t j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -173,7 +164,7 @@ __global__ void InternalRender(glm::vec<4, sf::Uint8, glm::packed_lowp>* __restr
 	{
 		Float u = Float(Float(i) + RandomFloat(seed)) / Float(max_x);
 		Float v = Float(Float(j) + RandomFloat(seed)) / Float(max_y);
-		// u		 = 1.0f - u;
+		// u = 1.0f - u;
 		v		 = __float2half(1.0f) - v;
 		auto ray = camera->GetRay(u, v);
 
@@ -181,8 +172,37 @@ __global__ void InternalRender(glm::vec<4, sf::Uint8, glm::packed_lowp>* __restr
 	}
 	randSeeds[pixel_index] = seed;
 	pixel_color *= colorMul;
-	pixel_color		= glm::sqrt(pixel_color);
-	fb[pixel_index] = glm::vec<4, sf::Uint8, glm::packed_lowp>(pixel_color.x * __float2half(255.f), pixel_color.y * __float2half(255.f), pixel_color.z * __float2half(255.f), 255);
+	pixel_color = glm::sqrt(pixel_color);
+
+	// Convert to uchar4 format
+	uchar4 pixel = make_uchar4(
+		static_cast<unsigned char>(pixel_color.x * __float2half(255.f)),
+		static_cast<unsigned char>(pixel_color.y * __float2half(255.f)),
+		static_cast<unsigned char>(pixel_color.z * __float2half(255.f)),
+		255);
+
+	// Write to surface
+	surf2Dwrite(pixel, fb, i * sizeof(uchar4), j);
+}
+
+// Host code to set up the surface object
+cudaSurfaceObject_t setupFramebufferSurface(uint32_t width, uint32_t height)
+{
+	// Allocate CUDA array
+	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<uchar4>();
+	cudaArray_t			  cuArray;
+	cudaMallocArray(&cuArray, &channelDesc, width, height, cudaArraySurfaceLoadStore);
+
+	// Create surface object
+	cudaResourceDesc resDesc;
+	memset(&resDesc, 0, sizeof(resDesc));
+	resDesc.resType			= cudaResourceTypeArray;
+	resDesc.res.array.array = cuArray;
+
+	cudaSurfaceObject_t surfObj;
+	cudaCreateSurfaceObject(&surfObj, &resDesc);
+
+	return surfObj;
 }
 
 __host__ void CudaRenderer::Init()
@@ -197,7 +217,6 @@ __host__ void CudaRenderer::Init()
 
 	// Allocate memory for the HittableList struct in device memory
 	CHECK_CUDA_ERRORS(cudaMalloc((void**)&d_list, sizeof(HittableList)));
-
 
 	// Copy the hitable count to the device
 	CHECK_CUDA_ERRORS(cudaMemcpy(&(d_list->m_Count), &numHitables, sizeof(int), cudaMemcpyHostToDevice));
@@ -226,6 +245,8 @@ __host__ void CudaRenderer::Init()
 	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 
 	cudaDeviceSetLimit(cudaLimitStackSize, 200);
+
+	d_Image = setupFramebufferSurface(m_Width, m_Height);
 }
 
 __host__ void CudaRenderer::Render() const
@@ -265,5 +286,5 @@ CudaRenderer::~CudaRenderer()
 	// cudaFree(d_materials);
 	cudaFree(d_world);
 	cudaFree(d_camera);
-	cudaFree(d_Image);
+	// cudaFree(d_Image);
 }

@@ -128,8 +128,16 @@ sf::Image Renderer::Render(const uint32_t width, const uint32_t height)
 	while (isRunning)
 	{
 		cudaRenderer.Render();
+		// If you need to copy data back to CPU or process further
+		// (Example: Copy to a SFML image)
+		cudaArray_t cuArray;
+		cudaResourceDesc resDesc;
 
-		cudaMemcpy((void*)image.getPixelsPtr(), cudaRenderer.GetImage(), width * height * 4 * sizeof(sf::Uint8), cudaMemcpyDeviceToHost);
+		cudaGetSurfaceObjectResourceDesc(&resDesc, cudaRenderer.GetImage());
+		cuArray = resDesc.res.array.array;
+
+		cudaMemcpy2DFromArray((void*)image.getPixelsPtr(), width * 4, cuArray, 0, 0, width * 4, height, cudaMemcpyDeviceToHost);
+		//cudaMemcpy((void*)image.getPixelsPtr(), cudaRenderer.GetImage(), width * height * 4 * sizeof(sf::Uint8), cudaMemcpyDeviceToHost);
 		// Notify the OpenGL thread a new frame is ready:
 		{
 			std::lock_guard<std::mutex> lock(frameMutex); 

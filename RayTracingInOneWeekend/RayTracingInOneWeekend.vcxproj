@@ -145,6 +145,7 @@
       <TypeInfo>false</TypeInfo>
       <Warning>W3</Warning>
       <MaxRegCount>0</MaxRegCount>
+      <NvccCompilation>compile</NvccCompilation>
     </CudaCompile>
     <CudaLink>
       <PerformDeviceLinkTimeOptimization>true</PerformDeviceLinkTimeOptimization>
