@@ -6,13 +6,13 @@ struct BVHSoA
 {
 	uint16_t* m_left;  // Index of left child (or sphere index for leaves)
 	uint16_t* m_right; // Index of right child (unused for leaves)
-	//Vec3* m_bounds_min;
-	//Vec3* m_bounds_max;
-	AABB* m_bounds;
-	uint16_t*	   m_is_leaf;
-	uint16_t   m_capacity;
-	uint16_t   m_count;
-	uint16_t   root;
+	// Vec3* m_bounds_min;
+	// Vec3* m_bounds_max;
+	AABB*	  m_bounds;
+	uint16_t* m_is_leaf;
+	uint16_t  m_capacity;
+	uint16_t  m_count;
+	uint16_t  root;
 
 	// Device constructor (not usable from host)
 	__host__ __device__ BVHSoA(uint16_t max_nodes)
@@ -30,8 +30,8 @@ struct BVHSoA
 		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_right, maxNodes * sizeof(uint16_t)));
 
 		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds, maxNodes * sizeof(AABB)));
-		//CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds_min, maxNodes * sizeof(Vec3)));
-		//CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds_max, maxNodes * sizeof(Vec3)));
+		// CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds_min, maxNodes * sizeof(Vec3)));
+		// CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds_max, maxNodes * sizeof(Vec3)));
 		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_is_leaf, maxNodes * sizeof(uint16_t)));
 
 		h_bvh.m_capacity = maxNodes;
@@ -59,45 +59,28 @@ struct BVHSoA
 		const AABB& box,
 		uint16_t	leaf)
 	{
-		 m_bounds[m_count]  = box;
-		//m_bounds_min[m_count] = box.Min;
-		//m_bounds_max[m_count] = box.Max;
-		m_left[m_count]		  = left_idx;
-		m_right[m_count]	  = right_idx;
-		m_is_leaf[m_count]	  = leaf;
+		m_bounds[m_count] = box;
+		// m_bounds_min[m_count] = box.Min;
+		// m_bounds_max[m_count] = box.Max;
+		m_left[m_count]	   = left_idx;
+		m_right[m_count]   = right_idx;
+		m_is_leaf[m_count] = leaf;
 		return m_count++;
 	}
 
-	
-//// Helper to compute approximate distance to node center for traversal ordering
-//	__device__ inline float ComputeNodeDistance(const Ray& ray, uint16_t nodeIdx) const
-//	{
-//		// Compute center of node bounds
-//		
-//		Vec3		center = m_bounds[nodeIdx].Center();
-//
-//		// Distance from ray origin to center
-//		Vec3 toCenter = center - ray.Origin();
-//		return dot(toCenter, ray.Direction());
-//	}
-
-	__device__ bool IntersectBounds(const Vec3& rayOrigin, const Vec3& invDir, uint16_t node_index, Float t_min, Float t_max) const
+	// Helper to compute approximate distance to node center for traversal ordering
+	__device__ float ComputeNodeDistance(const Ray& ray, uint16_t nodeIdx) const
 	{
-		const AABB& bounds	= m_bounds[node_index];
+		// Compute center of node bounds
 
-		const Vec3& t1 = (bounds.Min - rayOrigin) * invDir;
-		const Vec3& t2 = (bounds.Max - rayOrigin) * invDir;
+		Vec3 center = m_bounds[nodeIdx].Center();
 
-		const Vec3& tmin = glm::min(t1, t2);
-		const Vec3& tmax = glm::max(t1, t2);
-
-		Float t_enter = glm::hmax(glm::hmax(tmin.x, tmin.y), tmin.z);
-		Float t_exit  = glm::hmin(glm::hmin(tmax.x, tmax.y), tmax.z);
-
-		return (t_exit > t_enter) && (t_enter < t_max) && (t_exit > t_min);
+		// Distance from ray origin to center
+		Vec3 toCenter = center - ray.Origin();
+		return dot(toCenter, ray.Direction());
 	}
 
-__device__ bool IntersectBoundsFast(
+	__device__ bool IntersectBoundsFast(
 		const Vec3& rayOrigin,
 		const Vec3& invDir,
 		const int*	dirIsNeg, // Array of 3 ints indicating if direction is negative

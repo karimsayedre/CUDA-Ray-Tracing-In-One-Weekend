@@ -74,35 +74,80 @@ __device__ uint16_t BVHSoA::BuildBVH_SoA(const HittableList* list, uint16_t* ind
 
 __device__ bool BVHSoA::TraverseBVH_SoA(const Ray& ray, Float tmin, Float tmax, HittableList* __restrict__ list, HitRecord& best_hit) const
 {
-	bool hit_anything = false;
+	// Use registers for stack instead of memory
+	uint16_t currentNode = root;
+	uint16_t stackData[6]; // Reduced stack size - 6 is often sufficient for most scenes
+	int		 stackPtr	  = 0;
+	bool	 hit_anything = false;
 
-	uint16_t stack[6]; // Reduced from 64 if your scenes don't need deep traversal
-	int		 stack_ptr = 0;
+	// Pre-compute ray inverse direction and signs for faster bounds tests
+	const Vec3 invDir = {
+		__float2half(1.0f) / ray.Direction().x,
+		__float2half(1.0f) / ray.Direction().y,
+		__float2half(1.0f) / ray.Direction().z};
+	const int dirIsNeg[3] = {
+		invDir.x < __float2half(0.0f) ? 1 : 0,
+		invDir.y < __float2half(0.0f) ? 1 : 0,
+		invDir.z < __float2half(0.0f) ? 1 : 0};
 
-	stack[stack_ptr++]	   = root;
-	const Vec3 invDir	   = 1.0f / ray.Direction();
-	const int  dirIsNeg[3] = {
-		 std::signbit(invDir.x),
-		 std::signbit(invDir.y),
-		 std::signbit(invDir.z),
-	 };
-	while (stack_ptr > 0)
+	// Iterative traversal without immediate push of both children
+	while (true)
 	{
-		uint16_t entry = stack[--stack_ptr];
+		// Process current node
+		if (m_is_leaf[currentNode])
+		{
+			// Leaf node - process hit test
+			hit_anything |= list->Hit(ray, tmin, tmax, best_hit, m_left[currentNode]);
 
-		// Early exit if this node can't possibly be closer than our best hit
-		if (!IntersectBoundsFast(ray.Origin(), invDir, dirIsNeg, entry, tmin, tmax))
+			// Pop next node from stack
+			if (stackPtr == 0)
+				break;
+			currentNode = stackData[--stackPtr];
 			continue;
+		}
 
-		if (m_is_leaf[entry])
+		// Interior node - fetch children
+		uint16_t leftChild	= m_left[currentNode];
+		uint16_t rightChild = m_right[currentNode];
+
+		// Check both children for intersection
+		bool hitLeft  = IntersectBoundsFast(ray.Origin(), invDir, dirIsNeg, leftChild, tmin, tmax);
+		bool hitRight = IntersectBoundsFast(ray.Origin(), invDir, dirIsNeg, rightChild, tmin, tmax);
+
+		// Neither child was hit, pop from stack
+		if (!hitLeft && !hitRight)
 		{
-			hit_anything |= list->Hit(ray, tmin, tmax, best_hit, m_left[entry]);
+			if (stackPtr == 0)
+				break;
+			currentNode = stackData[--stackPtr];
+			continue;
 		}
-		else
+
+		// Both children were hit, process closer one first
+		if (hitLeft && hitRight)
 		{
-			stack[stack_ptr++] = m_right[entry];
-			stack[stack_ptr++] = m_left[entry];
+			// Determine traversal order (closer one first)
+			// This heuristic improves ray termination
+			float leftDist	= ComputeNodeDistance(ray, leftChild);
+			float rightDist = ComputeNodeDistance(ray, rightChild);
+
+			if (leftDist < rightDist)
+			{
+				// Left is farther, process right first
+				currentNode			  = rightChild;
+				stackData[stackPtr++] = leftChild; // Fixed: removed stack size check
+			}
+			else
+			{
+				// Right is farther, process left first
+				currentNode			  = leftChild;
+				stackData[stackPtr++] = rightChild; // Fixed: removed stack size check
+			}
+			continue;
 		}
+
+		// Only one child was hit
+		currentNode = hitLeft ? leftChild : rightChild;
 	}
 
 	return hit_anything;
