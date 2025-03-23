@@ -4,134 +4,130 @@
 
 struct alignas(32) BVHSoA
 {
-	struct alignas(8) BVH
+	struct alignas(4) BVH
 	{
-		uint16_t m_left;  // Index of left child (or sphere index for leaves)
-		uint16_t m_right; // Index of right child (unused for leaves)
-		uint16_t m_is_leaf;
+		uint16_t Left;	// Index of left child (or sphere index for leaves)
+		uint16_t Right; // Index of right child (unused for leaves)
 	};
+	BVH* m_BVHs;
 
-	// Vec3 m_bounds_min;
-	// Vec3 m_bounds_max;
-	AABB* m_bounds;
-
-	BVH*	 m_BVHs;
-	uint16_t m_count;
-	uint16_t root;
+	AABB*	 m_Bounds;
+	uint16_t m_Count = 0;
+	uint16_t m_Root	 = 0;
 
 	// Host function to initialize device memory
-	__host__ inline static void Init(BVHSoA*& d_bvh, uint16_t maxNodes)
+	__host__ static void Init(BVHSoA*& d_bvh, uint16_t maxNodes)
 	{
-		BVHSoA h_bvh; // Temporary host instance
+		BVHSoA h_BVH; // Temporary host instance
 
-		// Allocate memory for arrays on the device
-		// CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_left, maxNodes * sizeof(uint16_t)));
-		// CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_right, maxNodes * sizeof(uint16_t)));
-
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds, maxNodes * sizeof(AABB)));
-		//  CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds_min, maxNodes * sizeof(Vec3)));
-		//  CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds_max, maxNodes * sizeof(Vec3)));
-		// CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_is_leaf, maxNodes * sizeof(uint16_t)));
-
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_BVHs, maxNodes * sizeof(BVH)));
-
-		//h_bvh.m_capacity = maxNodes;
-		h_bvh.m_count	 = 0;
-		h_bvh.root		 = 0;
-
-		// Allocate memory for BVH structure on the device
+		CHECK_CUDA_ERRORS(cudaMalloc(&h_BVH.m_Bounds, maxNodes * sizeof(AABB)));
+		CHECK_CUDA_ERRORS(cudaMalloc(&h_BVH.m_BVHs, maxNodes * sizeof(BVH)));
 		CHECK_CUDA_ERRORS(cudaMalloc(&d_bvh, sizeof(BVHSoA)));
 
 		// Copy initialized BVH data to device
-		CHECK_CUDA_ERRORS(cudaMemcpy(d_bvh, &h_bvh, sizeof(BVHSoA), cudaMemcpyHostToDevice));
+		CHECK_CUDA_ERRORS(cudaMemcpy(d_bvh, &h_BVH, sizeof(BVHSoA), cudaMemcpyHostToDevice));
 	}
 
-	//__device__ ~BVHSoA()
-	//{
-	//	delete[] left;
-	//	delete[] right;
-	//	delete[] bounds;
-	//	delete[] is_leaf;
-	//}
-
-	__device__ uint16_t AddNode(
-		uint16_t	left_idx,
-		uint16_t	right_idx,
-		const AABB& box,
-		uint16_t	leaf)
+	__device__ uint16_t AddNode(uint16_t left_idx, uint16_t right_idx, const AABB& box)
 	{
-		// m_bounds[m_count] = box;
-		//  m_bounds_min[m_count] = box.Min;
-		//  m_bounds_max[m_count] = box.Max;
-		// m_left[m_count]	   = left_idx;
-		// m_right[m_count]   = right_idx;
-		// m_is_leaf[m_count] = leaf;
-
-		m_BVHs[m_count] = BVH {
-			left_idx,
-			right_idx,
-			// box,
-			leaf};
-
-		m_bounds[m_count] = box;
-		return m_count++;
+		m_BVHs[m_Count]	  = BVH {left_idx, right_idx};
+		m_Bounds[m_Count] = box;
+		return m_Count++;
 	}
 
-	// Helper to compute approximate distance to node center for traversal ordering
-	__device__ float ComputeNodeDistance(const Ray& ray, uint16_t nodeIdx) const
+	__device__ static float IntersectBounds(const AABB& bounds, const Vec3& origin, const Vec3& invDir, const int* dirIsNeg, float tmin, float tmax);
+
+	__device__ uint16_t Build(const HittableList* list, uint16_t* indices, uint16_t start, uint16_t end);
+
+
+	__device__ bool Traverse(const Ray& ray, float tmin, float tmax, HittableList* __restrict__ list, HitRecord& best_hit) const
 	{
-		// Compute center of node bounds
+		// Use registers for stack instead of memory
+		uint16_t currentNode = m_Root;
+		uint16_t stackData[16];
+		int		 stackPtr	  = 0;
+		bool	 hit_anything = false;
 
-		Vec3 center = m_bounds[nodeIdx].Center();
+		// Pre-compute ray inverse direction once
+		const Vec3 invDir = 1.0f / ray.Direction();
 
-		// Distance from ray origin to center
-		Vec3 toCenter = center - ray.Origin();
-		return dot(toCenter, ray.Direction());
+		const int dirIsNeg[3] = {
+			cuda::std::signbit(invDir.x),
+			cuda::std::signbit(invDir.y),
+			cuda::std::signbit(invDir.z),
+		};
+
+		stackData[stackPtr++] = currentNode;
+
+		// Precompute common values once (stored in registers)
+		const float ox = ray.Origin().x, oy = ray.Origin().y, oz = ray.Origin().z;
+		const float idx = invDir.x, idy = invDir.y, idz = invDir.z;
+
+		// Front-to-back traversal for early termination
+		while (stackPtr != 0)
+		{
+			assert(stackPtr < 16);
+
+			const BVH& node = m_BVHs[currentNode];
+
+			// Process leaf node
+			if (node.Right == UINT16_MAX)
+			{
+				// Process hit test
+				hit_anything |= list->Hit(ray, tmin, tmax, best_hit, node.Left);
+
+				currentNode = stackData[--stackPtr];
+				continue;
+			}
+
+			// Check left child
+			const AABB& leftBounds = m_Bounds[node.Left];
+			float		tx1 = (leftBounds.Min.x - ox) * idx, tx2 = (leftBounds.Max.x - ox) * idx;
+			float		ty1 = (leftBounds.Min.y - oy) * idy, ty2 = (leftBounds.Max.y - oy) * idy;
+			float		tz1 = (leftBounds.Min.z - oz) * idz, tz2 = (leftBounds.Max.z - oz) * idz;
+			float		tEnterL	 = fmaxf(fmaxf(dirIsNeg[0] ? tx2 : tx1, dirIsNeg[1] ? ty2 : ty1), fmaxf(dirIsNeg[2] ? tz2 : tz1, tmin));
+			float		tExitL	 = fminf(fminf(dirIsNeg[0] ? tx1 : tx2, dirIsNeg[1] ? ty1 : ty2), fminf(dirIsNeg[2] ? tz1 : tz2, tmax));
+			const float distLeft = (tEnterL > tExitL) ? FLT_MAX : tEnterL;
+
+			// Check right child
+			const AABB& rightBounds = m_Bounds[node.Right];
+			tx1 = (rightBounds.Min.x - ox) * idx, tx2 = (rightBounds.Max.x - ox) * idx;
+			ty1 = (rightBounds.Min.y - oy) * idy, ty2 = (rightBounds.Max.y - oy) * idy;
+			tz1 = (rightBounds.Min.z - oz) * idz, tz2 = (rightBounds.Max.z - oz) * idz;
+			float		tEnterR	  = fmaxf(fmaxf(dirIsNeg[0] ? tx2 : tx1, dirIsNeg[1] ? ty2 : ty1), fmaxf(dirIsNeg[2] ? tz2 : tz1, tmin));
+			float		tExitR	  = fminf(fminf(dirIsNeg[0] ? tx1 : tx2, dirIsNeg[1] ? ty1 : ty2), fminf(dirIsNeg[2] ? tz1 : tz2, tmax));
+			const float distRight = (tEnterR > tExitR) ? FLT_MAX : tEnterR;
+
+			// Neither child was hit
+			if (distLeft == FLT_MAX && distRight == FLT_MAX)
+			{
+				currentNode = stackData[--stackPtr];
+				continue;
+			}
+
+			// Both children hit - traverse closer one first
+			if (distLeft != FLT_MAX && distRight != FLT_MAX)
+			{
+				if (distLeft <= distRight)
+				{
+					// Left is closer
+					currentNode			  = node.Left;
+					stackData[stackPtr++] = node.Right;
+				}
+				else
+				{
+					// Right is closer
+					currentNode			  = node.Right;
+					stackData[stackPtr++] = node.Left;
+				}
+
+				continue;
+			}
+
+			// Only one child was hit
+			currentNode = (distLeft != FLT_MAX) ? node.Left : node.Right;
+		}
+
+		return hit_anything;
 	}
-
-	__device__ bool IntersectBoundsFast(
-		const Vec3& rayOrigin,
-		const Vec3& invDir,
-		const int*	dirIsNeg, // Array of 3 ints indicating if direction is negative
-		uint16_t	node_index,
-		Float		t_min,
-		Float		t_max) const
-	{
-		const AABB& bounds = m_bounds[node_index];
-
-		// Using dirIsNeg to select min/max bounds directly
-		Float t_x1	  = (bounds.Min.x - rayOrigin.x) * invDir.x;
-		Float t_x2	  = (bounds.Max.x - rayOrigin.x) * invDir.x;
-		Float t_min_x = dirIsNeg[0] ? t_x2 : t_x1;
-		Float t_max_x = dirIsNeg[0] ? t_x1 : t_x2;
-
-		Float t_y1	  = (bounds.Min.y - rayOrigin.y) * invDir.y;
-		Float t_y2	  = (bounds.Max.y - rayOrigin.y) * invDir.y;
-		Float t_min_y = dirIsNeg[1] ? t_y2 : t_y1;
-		Float t_max_y = dirIsNeg[1] ? t_y1 : t_y2;
-
-		Float t_z1	  = (bounds.Min.z - rayOrigin.z) * invDir.z;
-		Float t_z2	  = (bounds.Max.z - rayOrigin.z) * invDir.z;
-		Float t_min_z = dirIsNeg[2] ? t_z2 : t_z1;
-		Float t_max_z = dirIsNeg[2] ? t_z1 : t_z2;
-
-		// Finding entry and exit points
-		Float t_enter = glm::max(glm::max(t_min_x, t_min_y), glm::max(t_min_z, t_min));
-		Float t_exit  = glm::min(glm::min(t_max_x, t_max_y), glm::min(t_max_z, t_max));
-
-		return t_exit > t_enter;
-	}
-
-	__device__ uint16_t BuildBVH_SoA(
-		const HittableList* list,
-		uint16_t*			indices,
-		uint16_t			start,
-		uint16_t			end);
-
-	__device__ bool TraverseBVH_SoA(
-		const Ray&	  ray,
-		Float		  tmin,
-		Float		  tmax,
-		HittableList* list,
-		HitRecord&	  best_hit) const;
 };

@@ -1,77 +1,67 @@
 #pragma once
-#include <algorithm>
-#include <limits> // Include this header for std::numeric_limits
-
-#include "Vec3.h"
 
 class Interval
 {
   public:
-	Float min, max;
+	float Min, Max;
 
 	__device__ Interval()
-		: min(std::numeric_limits<Float>::infinity()), max(-std::numeric_limits<Float>::infinity())
+		: Min(std::numeric_limits<float>::infinity()), Max(-std::numeric_limits<float>::infinity())
 	{
-	} // Default Interval is empty
+	} 
 
-	__device__ Interval(Float _min, Float _max)
-		: min(_min), max(_max)
+	__device__ Interval(float _min, float _max)
+		: Min(_min), Max(_max)
 	{
 	}
 
 	__device__ Interval(const Interval& a, const Interval& b)
-		: min(glm::hmin(a.min, b.min)), max(glm::hmax(a.max, b.max))
+		: Min(glm::min(a.Min, b.Min)), Max(glm::max(a.Max, b.Max))
 	{
 	}
 
-	__device__ [[nodiscard]] Float size() const
+	__device__ [[nodiscard]] float Size() const
 	{
-		return max - min;
+		return Max - Min;
 	}
 
-	//__device__ [[nodiscard]] Interval Expand(Float delta) const
-	//{
-	//	auto padding = delta / 2;
-	//	return {min - padding, max + padding};
-	//}
-
-	__device__ [[nodiscard]] bool Contains(Float x) const
+	__device__ [[nodiscard]] bool Contains(const float x) const
 	{
-		return min <= x && x <= max;
+		return Min <= x && x <= Max;
 	}
 
-	__device__ [[nodiscard]] bool Surrounds(Float x) const
+	__device__ [[nodiscard]] bool Surrounds(const float x) const
 	{
-		return min < x && x < max;
+		return Min < x && x < Max;
 	}
 
-	__device__ [[nodiscard]] Float Clamp(Float x) const
+	__device__ [[nodiscard]] float Clamp(const float x) const
 	{
-		if (x < min)
-			return min;
-		if (x > max)
-			return max;
+		if (x < Min)
+			return Min;
+		if (x > Max)
+			return Max;
 		return x;
 	}
 
-	__device__ [[nodiscard]] Float Center() const
+	__device__ [[nodiscard]] float Center() const
 	{
-		return __float2half(0.5f) * (min + max);
+		return 0.5f * (Min + Max);
 	}
 
-	static const Interval empty;
-	static const Interval universe;
+	static const Interval s_Empty;
+	static const Interval s_Universe;
 };
 
-inline const Interval Interval::empty	 = Interval(+std::numeric_limits<Float>::infinity(), -std::numeric_limits<Float>::infinity());
-inline const Interval Interval::universe = Interval(-std::numeric_limits<Float>::infinity(), +std::numeric_limits<Float>::infinity());
+inline const Interval Interval::s_Empty	   = Interval(+std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity());
+inline const Interval Interval::s_Universe = Interval(-std::numeric_limits<float>::infinity(), +std::numeric_limits<float>::infinity());
 
-__device__ inline Interval operator+(const Interval& ival, Float displacement)
+__device__ inline Interval operator+(const Interval& interval, float displacement)
 {
-	return Interval(ival.min + displacement, ival.max + displacement);
+	return {interval.Min + displacement, interval.Max + displacement};
 }
 
-__device__ inline Interval operator+(Float displacement, const Interval& ival)
+__device__ inline Interval operator+(const float displacement, const Interval& interval)
 {
-	return ival + displacement;
+	return interval + displacement;
 }

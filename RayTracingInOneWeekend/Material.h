@@ -1,6 +1,5 @@
 #pragma once
 #include "Random.h"
-#include "Ray.h"
 #include "Vec3.h"
 
 enum class MaterialType
@@ -13,13 +12,13 @@ enum class MaterialType
 struct Materials
 {
 	// namespace MaterialSoA
-	Vec3*	  Albedo;
-	Float*	  Fuzz;
-	Float*	  Ior;
-	Vec3*	  Flags;
-	//Float* MaterialFlagsX;
-	//Float* MaterialFlagsY;
-	//Float* MaterialFlagsZ;
+	Vec3*  Albedo;
+	float* Fuzz;
+	float* Ior;
+	Vec3*  Flags;
+	// float* MaterialFlagsX;
+	// float* MaterialFlagsY;
+	// float* MaterialFlagsZ;
 
 	uint32_t Count = 0;
 
@@ -27,12 +26,9 @@ struct Materials
 	{
 		Materials h_materials;
 		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.Albedo, maxMaterialCount * sizeof(Vec3)));
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.Fuzz, maxMaterialCount * sizeof(Float)));
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.Ior, maxMaterialCount * sizeof(Float)));
-		//CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.MaterialFlagsX, maxMaterialCount * sizeof(Float)));
-		//CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.MaterialFlagsY, maxMaterialCount * sizeof(Float)));
-		//CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.MaterialFlagsZ, maxMaterialCount * sizeof(Float)));
 		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.Flags, maxMaterialCount * sizeof(Vec3)));
+		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.Fuzz, maxMaterialCount * sizeof(float)));
+		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.Ior, maxMaterialCount * sizeof(float)));
 
 		// Allocate memory for BVH structure on the device
 		CHECK_CUDA_ERRORS(cudaMalloc(&d_materials, sizeof(Materials)));
@@ -41,7 +37,7 @@ struct Materials
 		CHECK_CUDA_ERRORS(cudaMemcpy(d_materials, &h_materials, sizeof(Materials), cudaMemcpyHostToDevice));
 	}
 
-	__device__ void Add(MaterialType type, const Vec3& albedo, Float fuzz = 0.0f, Float ior = 1.0f)
+	__device__ void Add(MaterialType type, const Vec3& albedo, float fuzz = 0.0f, float ior = 1.0f)
 	{
 		Albedo[Count] = albedo;
 		Fuzz[Count]	  = fuzz;
@@ -69,55 +65,53 @@ struct Materials
 		Count++;
 	}
 
-	__device__ __noinline__ bool Scatter(Ray& incomingRay, const HitRecord& rec, Vec3& currAttenuation, uint32_t& randSeed) const
+	__device__ __forceinline__ bool Scatter(Ray& incomingRay, const HitRecord& rec, Vec3& currAttenuation, uint32_t& randSeed) const
 	{
 		// 1. Compute normalized direction with minimal temporaries
 		const Vec3& rayDir = incomingRay.Direction();
 
-		// 2. Compute normal and face orientation in one step
-
-		// 3. Get one random vector for all calculations
+		// 2. Get one random vector for all calculations
 		const Vec3 randomVec = RandomVec3(randSeed);
 
-		// 4. Lambert direction - immediate computation
+		// 3. Lambert direction - immediate computation
 		Vec3		lambertDir	  = rec.Normal + randomVec;
-		const Float lambertDirLen = glm::length(lambertDir);
-		lambertDir				  = lambertDirLen > __float2half(0.001f) ? lambertDir / lambertDirLen : rec.Normal;
+		const float lambertDirLen = glm::length(lambertDir);
+		lambertDir				  = lambertDirLen > 0.001f ? lambertDir / lambertDirLen : rec.Normal;
 
-		// 5. Metal direction - immediate computation
-		const Vec3 reflected = reflect(rayDir, rec.Normal);
+		// 4. Metal direction - immediate computation
+		const Vec3 reflected = Reflect(rayDir, rec.Normal);
 		const Vec3 metalDir	 = reflected + randomVec * Fuzz[rec.MaterialIndex];
 
-		// 6. Dielectric direction - computation with reused variables
+		// 5. Dielectric direction - computation with reused variables
 		Vec3 dielectricDir;
 		{
-			const Float ior			  = Ior[rec.MaterialIndex];
-			const Float dotRayNormal  = dot(rayDir, rec.Normal);
-			const bool	frontFace	  = dotRayNormal < __float2half(0.0f);
+			const float ior			  = Ior[rec.MaterialIndex];
+			const float dotRayNormal  = dot(rayDir, rec.Normal);
+			const bool	frontFace	  = dotRayNormal < 0.0f;
 			const Vec3& outwardNormal = frontFace ? rec.Normal : -rec.Normal;
-			const Float niOverNt	  = frontFace ? (__float2half(1.0f) / ior) : ior;
-			const Float cosine		  = frontFace ? -dotRayNormal : dotRayNormal;
+			const float niOverNt	  = frontFace ? (1.0f / ior) : ior;
+			const float cosine		  = frontFace ? -dotRayNormal : dotRayNormal;
 
 			Vec3		refracted;
-			const bool	canRefract	 = refract(rayDir, outwardNormal, niOverNt, refracted);
-			const Float reflectProb	 = canRefract ? Reflectance(cosine, ior) : __float2half(1.0f);
-			const Vec3	reflectedDir = reflect(rayDir, outwardNormal);
+			const bool	canRefract	 = Refract(rayDir, outwardNormal, niOverNt, refracted);
+			const float reflectProb	 = canRefract ? Reflectance(cosine, ior) : 1.0f;
+			const Vec3	reflectedDir = Reflect(rayDir, outwardNormal);
 			dielectricDir			 = (RandomFloat(randSeed) < reflectProb) ? reflectedDir : refracted;
 		}
 
-		// 7. Material weights - compute once
-		const Vec3	flags			 = Flags[rec.MaterialIndex];
-		const Float totalWeight	   = flags.x + flags.y + flags.z;
-		const Float invTotalWeight	 = totalWeight > __float2half(0.0001f) ? __float2half(1.0f) / totalWeight : __float2half(0.0f);
+		// 6. Material weights - compute once
+		const Vec3	flags		   = Flags[rec.MaterialIndex];
+		const float totalWeight	   = flags.x + flags.y + flags.z;
+		const float invTotalWeight = totalWeight > 0.0001f ? 1.0f / totalWeight : 0.0f;
 
-		// 8. Blend directions - direct computation with minimal temporaries
+		// 7. Blend directions - direct computation with minimal temporaries
 		const Vec3 finalDir = lambertDir * (flags.x * invTotalWeight) + metalDir * (flags.y * invTotalWeight) + dielectricDir * (flags.z * invTotalWeight);
 
-		// 9. Check valid scatter
-		const Float scatterDot	 = dot(finalDir, rec.Normal);
-		const bool	validScatter = (scatterDot > __float2half(0.0f)) || (flags.z > __float2half(0.0f));
+		// 8. Check valid scatter
+		const float scatterDot	 = dot(finalDir, rec.Normal);
+		const bool	validScatter = (scatterDot > 0.0f) || (flags.z > 0.0f);
 
-		// 10. Apply attenuation and update ray (no temporaries)
+		// 9. Apply attenuation and update ray
 		currAttenuation *= Albedo[rec.MaterialIndex];
 		incomingRay = {rec.Location, finalDir};
 

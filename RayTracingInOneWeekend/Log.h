@@ -5,15 +5,12 @@
 class Log
 {
 	inline static std::shared_ptr<spdlog::logger> s_CoreLogger;
-	inline static std::shared_ptr<spdlog::logger> s_FileLogger;
 public:
 	static void Init();
 
-	static void ShutDownFile();
-	static void ShutDownLogger();
+	static void ShutDown();
 
 	inline static std::shared_ptr<spdlog::logger>& GetCoreLogger() { return s_CoreLogger; }
-	inline static std::shared_ptr<spdlog::logger>& GetFileLogger() { return s_FileLogger; }
 };
 
 

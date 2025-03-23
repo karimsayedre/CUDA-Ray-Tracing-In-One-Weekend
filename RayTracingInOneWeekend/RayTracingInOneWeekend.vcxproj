@@ -56,11 +56,8 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LinkIncremental>true</LinkIncremental>
-  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LinkIncremental>true</LinkIncremental>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -97,7 +94,7 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <AdditionalCompilerOptions>
       </AdditionalCompilerOptions>
-      <Defines>__CUDACC_VER_MAJOR__=12;GLM_FORCE_CUDA;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT;GLM_FORCE_XYZW_ONLY</Defines>
+      <Defines>__CUDACC__=12.8;__CUDACC_VER_MAJOR__=12;__CUDACC_VER_MINOR__=8;GLM_FORCE_CUDA=1;GLM_ENABLE_EXPERIMENTAL=1;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT=1;GLM_FORCE_XYZW_ONLY=1;GLM_FORCE_ALIGNED_GENTYPES=1</Defines>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
       <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr -Xptxas=-v</AdditionalOptions>
       <PtxAsOptionV>false</PtxAsOptionV>
@@ -114,12 +111,14 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;GLM_ENABLE_EXPERIMENTAL;GLM_FORCE_ALIGNED_GENTYPES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <FloatingPointModel>Fast</FloatingPointModel>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.cuh</PrecompiledHeaderFile>
+      <Optimization>Full</Optimization>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -134,23 +133,20 @@
       </AdditionalCompilerOptions>
       <Defines>__CUDACC__=12.8;__CUDACC_VER_MAJOR__=12;__CUDACC_VER_MINOR__=8;GLM_FORCE_CUDA=1;GLM_ENABLE_EXPERIMENTAL=1;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT=1;GLM_FORCE_XYZW_ONLY=1;GLM_FORCE_ALIGNED_GENTYPES=1</Defines>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
-      <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr -Xptxas=-v</AdditionalOptions>
+      <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr -Xptxas=-v </AdditionalOptions>
       <PtxAsOptionV>false</PtxAsOptionV>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
       <FastMath>true</FastMath>
       <InterleaveSourceInPTX>true</InterleaveSourceInPTX>
       <GenerateLineInfo>true</GenerateLineInfo>
-      <Optimization>O3</Optimization>
       <RuntimeChecks>Default</RuntimeChecks>
       <TypeInfo>false</TypeInfo>
       <Warning>W3</Warning>
       <MaxRegCount>0</MaxRegCount>
-      <NvccCompilation>compile</NvccCompilation>
     </CudaCompile>
     <CudaLink>
       <PerformDeviceLinkTimeOptimization>true</PerformDeviceLinkTimeOptimization>
       <PerformDeviceLink>true</PerformDeviceLink>
-      <Optimization>O3</Optimization>
     </CudaLink>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugNoSan|x64'">
@@ -169,35 +165,36 @@
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
       <GPUDebugInfo>true</GPUDebugInfo>
-      <Defines>GLM_FORCE_CXX20;__CUDACC_VER_MAJOR__=12;GLM_FORCE_CUDA;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT;GLM_FORCE_XYZW_ONLY</Defines>
-      <HostDebugInfo>true</HostDebugInfo>
+      <Defines>__CUDACC__=12.8;__CUDACC_VER_MAJOR__=12;__CUDACC_VER_MINOR__=8;GLM_FORCE_CUDA=1;GLM_ENABLE_EXPERIMENTAL=1;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT=1;GLM_FORCE_XYZW_ONLY=1;GLM_FORCE_ALIGNED_GENTYPES=1</Defines>
       <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr -Xptxas=-v</AdditionalOptions>
       <InterleaveSourceInPTX>true</InterleaveSourceInPTX>
       <MaxRegCount>0</MaxRegCount>
+      <HostDebugInfo>true</HostDebugInfo>
     </CudaCompile>
+    <CudaLink>
+      <Optimization>O1</Optimization>
+    </CudaLink>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Log.cpp" />
-    <ClCompile Include="Ray.cpp" />
-    <ClCompile Include="Renderer.cpp" />
-    <CudaCompile Include="HittableList.cu" />
-    <ClCompile Include="Vec3.cpp" />
     <ClInclude Include="AABB.h" />
     <ClInclude Include="BVH.h" />
-    <ClInclude Include="CudaCamera.cuh" />
+    <ClInclude Include="Camera.cuh" />
+    <ClInclude Include="Cuda.h" />
     <ClInclude Include="CudaRenderer.cuh" />
     <ClInclude Include="Debug.h" />
     <ClInclude Include="HittableList.h" />
     <ClInclude Include="Interval.h" />
     <ClInclude Include="Log.h" />
-    <ClCompile Include="RayTracingInOneWeekend.cpp" />
+    <ClCompile Include="Main.cpp" />
     <ClInclude Include="Material.h" />
     <ClInclude Include="pch.cuh" />
     <ClInclude Include="Random.h" />
     <ClInclude Include="Ray.h" />
+    <ClInclude Include="Raytracer.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="Vec3.h" />
-    <ClInclude Include="Viewer.h" />
+    <CudaCompile Include="Raytracer.cu" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="BVH.cu" />

@@ -1,23 +1,21 @@
 #pragma once
-#include <cuda_runtime.h>
 #include "Interval.h"
-#include "Ray.h"
 
-class alignas(32) AABB
+class alignas(16) AABB
 {
   public:
 	Vec3 Min;
 	Vec3 Max;
 
 	__device__ AABB()
-		: Min(std::numeric_limits<Float>::max()),
-		  Max(-std::numeric_limits<Float>::max())
+		: Min(std::numeric_limits<float>::max()),
+		  Max(-std::numeric_limits<float>::max())
 	{
 	}
 
 	__device__ AABB(const Interval& ix, const Interval& iy, const Interval& iz)
-		: Min(Vec3(ix.min, iy.min, iz.min)),
-		  Max(Vec3(ix.max, iy.max, iz.max))
+		: Min(Vec3(ix.Min, iy.Min, iz.Min)),
+		  Max(Vec3(ix.Max, iy.Max, iz.Max))
 	{
 	}
 
@@ -44,15 +42,6 @@ class alignas(32) AABB
 	__device__ [[nodiscard]] Vec3 Center() const
 	{
 		return (Min + Max) * 0.5f;
-	}
-
-	__device__ [[nodiscard]] int LongestAxis() const
-	{
-		// Returns the index of the longest axis of the bounding box.
-		if (Max.x - Min.x > Max.y - Min.y)
-			return Max.x - Min.x > Max.z - Min.z ? 0 : 2;
-		else
-			return Max.y - Min.y > Max.z - Min.z ? 1 : 2;
 	}
 };
 

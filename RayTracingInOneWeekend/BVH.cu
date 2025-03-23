@@ -4,7 +4,33 @@
 #include "AABB.h"
 #include "Ray.h"
 
-__device__ uint16_t BVHSoA::BuildBVH_SoA(const HittableList* list, uint16_t* indices, uint16_t start, uint16_t end)
+__device__ float BVHSoA::IntersectBounds(const AABB& bounds, const Vec3& origin, const Vec3& invDir, const int* dirIsNeg, float tmin, float tmax)
+{
+	// Compute initial slab intervals for all axes
+	const float tx1 = (bounds.Min.x - origin.x) * invDir.x;
+	const float tx2 = (bounds.Max.x - origin.x) * invDir.x;
+	const float ty1 = (bounds.Min.y - origin.y) * invDir.y;
+	const float ty2 = (bounds.Max.y - origin.y) * invDir.y;
+	const float tz1 = (bounds.Min.z - origin.z) * invDir.z;
+	const float tz2 = (bounds.Max.z - origin.z) * invDir.z;
+
+	// Branchless selection of entry/exit for each axis
+	const float tEnterX = dirIsNeg[0] ? tx2 : tx1;
+	const float tExitX	= dirIsNeg[0] ? tx1 : tx2;
+	const float tEnterY = dirIsNeg[1] ? ty2 : ty1;
+	const float tExitY	= dirIsNeg[1] ? ty1 : ty2;
+	const float tEnterZ = dirIsNeg[2] ? tz2 : tz1;
+	const float tExitZ	= dirIsNeg[2] ? tz1 : tz2;
+
+	// Process axes sequentially with early exit
+	const float tEnter = fmaxf(fmaxf(tEnterX, tEnterY), fmaxf(tEnterZ, tmin));
+	const float tExit  = fminf(fminf(tExitX, tExitY), fminf(tExitZ, tmax));
+
+	// Early exit check (no intersection)
+	return (tEnter > tExit) ? FLT_MAX : tEnter;
+}
+
+__device__ uint16_t BVHSoA::Build(const HittableList* list, uint16_t* indices, uint16_t start, uint16_t end)
 {
 	uint16_t object_span = end - start;
 
@@ -30,7 +56,7 @@ __device__ uint16_t BVHSoA::BuildBVH_SoA(const HittableList* list, uint16_t* ind
 	if (object_span == 1)
 	{
 		// Leaf node: store sphere index
-		return AddNode(indices[start], UINT16_MAX, box, true);
+		return AddNode(indices[start], UINT16_MAX, box);
 	}
 
 	if (object_span == 2)
@@ -42,12 +68,12 @@ __device__ uint16_t BVHSoA::BuildBVH_SoA(const HittableList* list, uint16_t* ind
 		const AABB& box_a = list->m_AABB[idx_a];
 		const AABB& box_b = list->m_AABB[idx_b];
 
-		uint16_t left_leaf	= AddNode(idx_a, UINT16_MAX, box_a, true);
-		uint16_t right_leaf = AddNode(idx_b, UINT16_MAX, box_b, true);
+		uint16_t left_leaf	= AddNode(idx_a, UINT16_MAX, box_a);
+		uint16_t right_leaf = AddNode(idx_b, UINT16_MAX, box_b);
 
 		// Create parent internal node
 		const AABB combined(box_a, box_b);
-		return AddNode(left_leaf, right_leaf, combined, false);
+		return AddNode(left_leaf, right_leaf, combined);
 	}
 
 	// Use SAH to find the best split
@@ -130,75 +156,14 @@ __device__ uint16_t BVHSoA::BuildBVH_SoA(const HittableList* list, uint16_t* ind
 	}
 
 	// Recursively build children
-	const uint16_t left_idx	 = BuildBVH_SoA(list, indices, start, best_split_idx);
-	const uint16_t right_idx = BuildBVH_SoA(list, indices, best_split_idx, end);
+	const uint16_t left_idx	 = Build(list, indices, start, best_split_idx);
+	const uint16_t right_idx = Build(list, indices, best_split_idx, end);
 
 	// Compute the combined bounding box from the actual child nodes
-	AABB		combined  = m_bounds[left_idx];
-	const AABB& rightAABB = m_bounds[right_idx];
+	AABB		combined  = m_Bounds[left_idx];
+	const AABB& rightAABB = m_Bounds[right_idx];
 	combined			  = AABB(combined, rightAABB);
 
-	return AddNode(left_idx, right_idx, combined, false);
+	return AddNode(left_idx, right_idx, combined);
 }
 
-__device__ bool BVHSoA::TraverseBVH_SoA(const Ray& ray, Float tmin, Float tmax, HittableList* __restrict__ list, HitRecord& best_hit) const
-{
-	// Use registers for stack instead of memory
-	uint16_t currentNode = root;
-	uint16_t stackData[6]; // Reduced stack size - 6 is often sufficient for most scenes
-	int		 stackPtr	  = 0;
-	bool	 hit_anything = false;
-
-	// Pre-compute ray inverse direction and signs for faster bounds tests
-	const Vec3 invDir = {
-		__float2half(1.0f) / ray.Direction().x,
-		__float2half(1.0f) / ray.Direction().y,
-		__float2half(1.0f) / ray.Direction().z};
-
-	const int dirIsNeg[3] = {
-		cuda::std::signbit(invDir.x),
-		cuda::std::signbit(invDir.y),
-		cuda::std::signbit(invDir.z),
-	};
-
-	stackData[stackPtr++] = currentNode;
-
-	// Iterative traversal without immediate push of both children
-	while (stackPtr != 0)
-	{
-		const BVH& node = m_BVHs[currentNode];
-		// Process current node
-		if (node.m_is_leaf)
-		{
-			// Leaf node - process hit test
-			hit_anything |= list->Hit(ray, tmin, tmax, best_hit, node.m_left);
-
-			// Pop next node from stack
-			currentNode = stackData[--stackPtr];
-			continue;
-		}
-
-		// Check both children for intersection
-		bool hitLeft  = IntersectBoundsFast(ray.Origin(), invDir, dirIsNeg, node.m_left, tmin, tmax);
-		bool hitRight = IntersectBoundsFast(ray.Origin(), invDir, dirIsNeg, node.m_right, tmin, tmax);
-
-		// Neither child was hit, pop from stack
-		if (!hitLeft && !hitRight)
-		{
-			currentNode = stackData[--stackPtr];
-			continue;
-		}
-
-		if (hitLeft && hitRight)
-		{
-			currentNode			  = node.m_left;
-			stackData[stackPtr++] = node.m_right;
-			continue;
-		}
-
-		// Only one child was hit
-		currentNode = hitLeft ? node.m_left : node.m_right;
-	}
-
-	return hit_anything;
-}
