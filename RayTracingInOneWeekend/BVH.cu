@@ -85,13 +85,17 @@ __device__ bool BVHSoA::TraverseBVH_SoA(const Ray& ray, Float tmin, Float tmax, 
 		__float2half(1.0f) / ray.Direction().x,
 		__float2half(1.0f) / ray.Direction().y,
 		__float2half(1.0f) / ray.Direction().z};
+
 	const int dirIsNeg[3] = {
-		invDir.x < __float2half(0.0f) ? 1 : 0,
-		invDir.y < __float2half(0.0f) ? 1 : 0,
-		invDir.z < __float2half(0.0f) ? 1 : 0};
+		cuda::std::signbit(invDir.x),
+		cuda::std::signbit(invDir.y),
+		cuda::std::signbit(invDir.z),
+	};
+
+	stackData[stackPtr++] = currentNode;
 
 	// Iterative traversal without immediate push of both children
-	while (true)
+	while (stackPtr != 0)
 	{
 		// Process current node
 		if (m_is_leaf[currentNode])
@@ -100,8 +104,6 @@ __device__ bool BVHSoA::TraverseBVH_SoA(const Ray& ray, Float tmin, Float tmax, 
 			hit_anything |= list->Hit(ray, tmin, tmax, best_hit, m_left[currentNode]);
 
 			// Pop next node from stack
-			if (stackPtr == 0)
-				break;
 			currentNode = stackData[--stackPtr];
 			continue;
 		}
@@ -117,32 +119,14 @@ __device__ bool BVHSoA::TraverseBVH_SoA(const Ray& ray, Float tmin, Float tmax, 
 		// Neither child was hit, pop from stack
 		if (!hitLeft && !hitRight)
 		{
-			if (stackPtr == 0)
-				break;
 			currentNode = stackData[--stackPtr];
 			continue;
 		}
 
-		// Both children were hit, process closer one first
 		if (hitLeft && hitRight)
 		{
-			// Determine traversal order (closer one first)
-			// This heuristic improves ray termination
-			float leftDist	= ComputeNodeDistance(ray, leftChild);
-			float rightDist = ComputeNodeDistance(ray, rightChild);
-
-			if (leftDist < rightDist)
-			{
-				// Left is farther, process right first
-				currentNode			  = rightChild;
-				stackData[stackPtr++] = leftChild; // Fixed: removed stack size check
-			}
-			else
-			{
-				// Right is farther, process left first
-				currentNode			  = leftChild;
-				stackData[stackPtr++] = rightChild; // Fixed: removed stack size check
-			}
+			currentNode = leftChild;
+			stackData[stackPtr++] = rightChild;
 			continue;
 		}
 
