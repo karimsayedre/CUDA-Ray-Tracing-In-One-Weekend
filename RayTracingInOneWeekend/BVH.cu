@@ -97,24 +97,21 @@ __device__ bool BVHSoA::TraverseBVH_SoA(const Ray& ray, Float tmin, Float tmax, 
 	// Iterative traversal without immediate push of both children
 	while (stackPtr != 0)
 	{
+		const BVH& node = m_BVHs[currentNode];
 		// Process current node
-		if (m_is_leaf[currentNode])
+		if (node.m_is_leaf)
 		{
 			// Leaf node - process hit test
-			hit_anything |= list->Hit(ray, tmin, tmax, best_hit, m_left[currentNode]);
+			hit_anything |= list->Hit(ray, tmin, tmax, best_hit, node.m_left);
 
 			// Pop next node from stack
 			currentNode = stackData[--stackPtr];
 			continue;
 		}
 
-		// Interior node - fetch children
-		uint16_t leftChild	= m_left[currentNode];
-		uint16_t rightChild = m_right[currentNode];
-
 		// Check both children for intersection
-		bool hitLeft  = IntersectBoundsFast(ray.Origin(), invDir, dirIsNeg, leftChild, tmin, tmax);
-		bool hitRight = IntersectBoundsFast(ray.Origin(), invDir, dirIsNeg, rightChild, tmin, tmax);
+		bool hitLeft  = IntersectBoundsFast(ray.Origin(), invDir, dirIsNeg, node.m_left, tmin, tmax);
+		bool hitRight = IntersectBoundsFast(ray.Origin(), invDir, dirIsNeg, node.m_right, tmin, tmax);
 
 		// Neither child was hit, pop from stack
 		if (!hitLeft && !hitRight)
@@ -125,13 +122,13 @@ __device__ bool BVHSoA::TraverseBVH_SoA(const Ray& ray, Float tmin, Float tmax, 
 
 		if (hitLeft && hitRight)
 		{
-			currentNode = leftChild;
-			stackData[stackPtr++] = rightChild;
+			currentNode			  = node.m_left;
+			stackData[stackPtr++] = node.m_right;
 			continue;
 		}
 
 		// Only one child was hit
-		currentNode = hitLeft ? leftChild : rightChild;
+		currentNode = hitLeft ? node.m_left : node.m_right;
 	}
 
 	return hit_anything;

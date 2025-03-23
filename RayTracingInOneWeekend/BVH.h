@@ -4,19 +4,25 @@
 
 struct BVHSoA
 {
-	uint16_t* m_left;  // Index of left child (or sphere index for leaves)
-	uint16_t* m_right; // Index of right child (unused for leaves)
-	// Vec3* m_bounds_min;
-	// Vec3* m_bounds_max;
-	AABB*	  m_bounds;
-	uint16_t* m_is_leaf;
-	uint16_t  m_capacity;
-	uint16_t  m_count;
-	uint16_t  root;
+	struct BVH
+	{
+		uint16_t m_left;  // Index of left child (or sphere index for leaves)
+		uint16_t m_right; // Index of right child (unused for leaves)
+		uint16_t m_is_leaf;
+	};
+
+	// Vec3 m_bounds_min;
+	// Vec3 m_bounds_max;
+	AABB* m_bounds;
+
+	BVH*	 m_BVHs;
+	uint16_t m_capacity;
+	uint16_t m_count;
+	uint16_t root;
 
 	// Device constructor (not usable from host)
 	__host__ __device__ BVHSoA(uint16_t max_nodes)
-		: m_left(nullptr), m_right(nullptr), m_is_leaf(nullptr), m_capacity(max_nodes), m_count(0), root(0)
+		: m_capacity(max_nodes), m_count(0), root(0)
 	{
 	}
 
@@ -26,13 +32,15 @@ struct BVHSoA
 		BVHSoA h_bvh(maxNodes); // Temporary host instance
 
 		// Allocate memory for arrays on the device
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_left, maxNodes * sizeof(uint16_t)));
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_right, maxNodes * sizeof(uint16_t)));
+		// CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_left, maxNodes * sizeof(uint16_t)));
+		// CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_right, maxNodes * sizeof(uint16_t)));
 
 		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds, maxNodes * sizeof(AABB)));
-		// CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds_min, maxNodes * sizeof(Vec3)));
-		// CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds_max, maxNodes * sizeof(Vec3)));
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_is_leaf, maxNodes * sizeof(uint16_t)));
+		//  CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds_min, maxNodes * sizeof(Vec3)));
+		//  CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_bounds_max, maxNodes * sizeof(Vec3)));
+		// CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_is_leaf, maxNodes * sizeof(uint16_t)));
+
+		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_BVHs, maxNodes * sizeof(BVH)));
 
 		h_bvh.m_capacity = maxNodes;
 		h_bvh.m_count	 = 0;
@@ -59,12 +67,20 @@ struct BVHSoA
 		const AABB& box,
 		uint16_t	leaf)
 	{
+		// m_bounds[m_count] = box;
+		//  m_bounds_min[m_count] = box.Min;
+		//  m_bounds_max[m_count] = box.Max;
+		// m_left[m_count]	   = left_idx;
+		// m_right[m_count]   = right_idx;
+		// m_is_leaf[m_count] = leaf;
+
+		m_BVHs[m_count] = BVH {
+			left_idx,
+			right_idx,
+			// box,
+			leaf};
+
 		m_bounds[m_count] = box;
-		// m_bounds_min[m_count] = box.Min;
-		// m_bounds_max[m_count] = box.Max;
-		m_left[m_count]	   = left_idx;
-		m_right[m_count]   = right_idx;
-		m_is_leaf[m_count] = leaf;
 		return m_count++;
 	}
 
