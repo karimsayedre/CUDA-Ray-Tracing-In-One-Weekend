@@ -26,6 +26,7 @@ __device__ uint16_t BVHSoA::BuildBVH_SoA(const HittableList* list, uint16_t* ind
 		}
 	}
 
+	// Handle leaf cases
 	if (object_span == 1)
 	{
 		// Leaf node: store sphere index
@@ -49,26 +50,94 @@ __device__ uint16_t BVHSoA::BuildBVH_SoA(const HittableList* list, uint16_t* ind
 		return AddNode(left_leaf, right_leaf, combined, false);
 	}
 
-	// Sort indices based on bounding box centroids
-	int	 axis		= box.LongestAxis();
-	auto comparator = [&](uint32_t a, uint32_t b)
-	{
-		return list->m_AABB[a].Center()[axis] < list->m_AABB[b].Center()[axis];
-	};
+	// Use SAH to find the best split
+	float	 best_cost		= FLT_MAX;
+	uint16_t best_axis		= 0;
+	uint16_t best_split_idx = start + object_span / 2; // Default middle split as fallback
 
-	thrust::sort(indices + start, indices + end, comparator);
+	// Cost of not splitting (creating a leaf)
+	float no_split_cost = object_span * box.SurfaceArea();
+
+	// Try each axis
+	for (uint16_t axis = 0; axis < 3; ++axis)
+	{
+		// Sort indices along this axis
+		auto comparator = [&](uint32_t a, uint32_t b)
+		{
+			return list->m_AABB[a].Center()[axis] < list->m_AABB[b].Center()[axis];
+		};
+
+		thrust::sort(indices + start, indices + end, comparator);
+
+		// Precompute all bounding boxes from left to right
+		AABB* left_boxes = new AABB[object_span];
+		left_boxes[0]	 = list->m_AABB[indices[start]];
+		for (uint16_t i = 1; i < object_span; ++i)
+		{
+			left_boxes[i] = AABB(left_boxes[i - 1], list->m_AABB[indices[start + i]]);
+		}
+
+		// Precompute all bounding boxes from right to left
+		AABB* right_boxes			 = new AABB[object_span];
+		right_boxes[object_span - 1] = list->m_AABB[indices[end - 1]];
+		for (int i = object_span - 2; i >= 0; --i)
+		{
+			right_boxes[i] = AABB(right_boxes[i + 1], list->m_AABB[indices[start + i]]);
+		}
+
+		// Evaluate SAH cost for each possible split
+		for (uint16_t i = 1; i < object_span; ++i)
+		{
+			uint16_t left_count	 = i;
+			uint16_t right_count = object_span - i;
+
+			float left_sa  = left_boxes[i - 1].SurfaceArea();
+			float right_sa = right_boxes[i].SurfaceArea();
+
+			// SAH cost formula: C = T_traverse + (left_count * left_sa + right_count * right_sa) / parent_sa * T_intersect
+			// We can simplify by using constant traversal and intersection costs
+			float traversal_cost	= 1.0f;
+			float intersection_cost = 1.0f;
+			float parent_sa			= box.SurfaceArea();
+
+			float cost = traversal_cost + (left_count * left_sa + right_count * right_sa) / parent_sa * intersection_cost;
+
+			if (cost < best_cost)
+			{
+				best_cost	   = cost;
+				best_axis	   = axis;
+				best_split_idx = start + i;
+			}
+		}
+
+		delete[] left_boxes;
+		delete[] right_boxes;
+	}
+
+	// If no split is better than not splitting, and we have fewer than some threshold of objects,
+	// we could make this a leaf. However, we'll always split for simplicity and compatibility
+	// with the traversal function.
+
+	// Resort along the best axis if it's not the last one we tried
+	if (best_axis != 2)
+	{
+		auto comparator = [&](uint32_t a, uint32_t b)
+		{
+			return list->m_AABB[a].Center()[best_axis] < list->m_AABB[b].Center()[best_axis];
+		};
+
+		thrust::sort(indices + start, indices + end, comparator);
+	}
 
 	// Recursively build children
-	uint16_t	   mid		 = start + object_span / 2;
-	const uint16_t left_idx	 = BuildBVH_SoA(list, indices, start, mid);
-	const uint16_t right_idx = BuildBVH_SoA(list, indices, mid, end);
+	const uint16_t left_idx	 = BuildBVH_SoA(list, indices, start, best_split_idx);
+	const uint16_t right_idx = BuildBVH_SoA(list, indices, best_split_idx, end);
 
-	AABB combined = m_bounds[left_idx];
-
+	// Compute the combined bounding box from the actual child nodes
+	AABB		combined  = m_bounds[left_idx];
 	const AABB& rightAABB = m_bounds[right_idx];
+	combined			  = AABB(combined, rightAABB);
 
-	// Compute the new combined bounding box
-	combined = AABB(combined, rightAABB);
 	return AddNode(left_idx, right_idx, combined, false);
 }
 

@@ -14,7 +14,7 @@ struct HittableList;
 struct Materials;
 struct BVHSoA;
 
-struct HitRecord
+struct alignas (32) HitRecord
 {
 	Vec3 Location;
 	Float T;

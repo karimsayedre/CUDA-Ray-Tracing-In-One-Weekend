@@ -17,12 +17,6 @@ sf::Image Renderer::Render(const uint32_t width, const uint32_t height)
 	constexpr float colorMul		= 1.0f / (float)samplesPerPixel;
 	constexpr int	maxDepth		= 50;
 
-	// World
-	// HittableList world = RandomScene();
-
-	// Camera
-	// Camera camera(vec3(13.0f, 2.0f, 3.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f), 20.0f, aspectRatio);
-
 	std::atomic_bool isRunning = true;
 
 	std::mutex				frameMutex;
@@ -51,8 +45,6 @@ sf::Image Renderer::Render(const uint32_t width, const uint32_t height)
 				frameReady = false; // Reset for next frame.
 			}
 
-			// window.clear(sf::Color::Transparent);
-			//  check all the window's events that were triggered since the last iteration of the loop
 			sf::Event event;
 			while (window.pollEvent(event))
 			{
@@ -130,17 +122,14 @@ sf::Image Renderer::Render(const uint32_t width, const uint32_t height)
 		cudaRenderer.Render();
 		// If you need to copy data back to CPU or process further
 		// (Example: Copy to a SFML image)
-		cudaArray_t cuArray;
 		cudaResourceDesc resDesc;
-
 		cudaGetSurfaceObjectResourceDesc(&resDesc, cudaRenderer.GetImage());
-		cuArray = resDesc.res.array.array;
+		cudaArray_t cuArray = resDesc.res.array.array;
 
 		cudaMemcpy2DFromArray((void*)image.getPixelsPtr(), width * 4, cuArray, 0, 0, width * 4, height, cudaMemcpyDeviceToHost);
-		//cudaMemcpy((void*)image.getPixelsPtr(), cudaRenderer.GetImage(), width * height * 4 * sizeof(sf::Uint8), cudaMemcpyDeviceToHost);
-		// Notify the OpenGL thread a new frame is ready:
 		{
-			std::lock_guard<std::mutex> lock(frameMutex); 
+			//  Notify the OpenGL thread a new frame is ready:
+			std::unique_lock<std::mutex> lock(frameMutex);
 			frameReady = true;
 		}
 		frameCV.notify_one();

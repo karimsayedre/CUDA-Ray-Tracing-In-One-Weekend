@@ -33,6 +33,14 @@ class alignas(32) AABB
 	{
 	}
 
+	__device__ __host__ float SurfaceArea() const
+	{
+		const float dx = Max.x - Min.x;
+		const float dy = Max.y - Min.y;
+		const float dz = Max.z - Min.z;
+		return 2.0f * (dx * dy + dy * dz + dz * dx);
+	}
+
 	__device__ [[nodiscard]] Vec3 Center() const
 	{
 		return (Min + Max) * 0.5f;
@@ -57,3 +65,4 @@ __device__ inline AABB operator+(const Vec3& offset, const AABB& bbox)
 {
 	return bbox + offset;
 }
+

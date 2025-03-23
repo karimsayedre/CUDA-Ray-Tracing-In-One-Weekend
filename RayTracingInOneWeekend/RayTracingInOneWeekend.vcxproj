@@ -78,7 +78,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>FMT_UNICODE=0;_DEBUG;_CONSOLE;GLM_ENABLE_EXPERIMENTAL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>FMT_UNICODE=0;_DEBUG;_CONSOLE;GLM_ENABLE_EXPERIMENTAL;GLM_FORCE_ALIGNED_GENTYPES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
@@ -111,7 +111,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;GLM_ENABLE_EXPERIMENTAL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;GLM_ENABLE_EXPERIMENTAL;GLM_FORCE_ALIGNED_GENTYPES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
@@ -132,7 +132,7 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <AdditionalCompilerOptions>
       </AdditionalCompilerOptions>
-      <Defines>__CUDACC__=12.8;__CUDACC_VER_MAJOR__=12;__CUDACC_VER_MINOR__=8;GLM_FORCE_CUDA;GLM_ENABLE_EXPERIMENTAL;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT;GLM_FORCE_XYZW_ONLY</Defines>
+      <Defines>__CUDACC__=12.8;__CUDACC_VER_MAJOR__=12;__CUDACC_VER_MINOR__=8;GLM_FORCE_CUDA=1;GLM_ENABLE_EXPERIMENTAL=1;GLM_COMPILER=GLM_COMPILER_CUDA_RTC;GLM_FORCE_CTOR_INIT=1;GLM_FORCE_XYZW_ONLY=1;GLM_FORCE_ALIGNED_GENTYPES=1</Defines>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
       <AdditionalOptions>-diag-suppress 1394 -Xcompiler "/wd4005" -std=c++20 --expt-relaxed-constexpr -Xptxas=-v</AdditionalOptions>
       <PtxAsOptionV>false</PtxAsOptionV>
@@ -158,7 +158,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>FMT_UNICODE=0;_DEBUG;_CONSOLE;GLM_ENABLE_EXPERIMENTAL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>FMT_UNICODE=0;_DEBUG;_CONSOLE;GLM_ENABLE_EXPERIMENTAL;GLM_FORCE_ALIGNED_GENTYPES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeaderFile />
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>

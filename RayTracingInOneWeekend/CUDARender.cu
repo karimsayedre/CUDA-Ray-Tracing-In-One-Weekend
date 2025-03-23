@@ -101,7 +101,7 @@ __global__ void create_world(HittableList* d_list, Materials* d_materials, BVHSo
 			indices[index] = index;
 
 		d_world->root = d_world->BuildBVH_SoA(d_list, indices, 0, d_list->m_Count);
-		printf("BVH created with %u nodes out of %u allocated\n", d_world->m_count, d_world->m_capacity);
+		printf("BVH created with %u nodes.\n", d_world->m_count);
 
 		printf("BVH Root: %u\n", d_world->root);
 		// DebugBVHNode(d_world, d_world->root);
@@ -143,7 +143,7 @@ __device__ static Vec3 RayColor(Ray& ray, BVHSoA* __restrict__ world, HittableLi
 		// Early exit on no scatter
 		if (!materials->Scatter(ray, rec, cur_attenuation, randSeed))
 			return Vec3(0.0f);
-	} 
+	}
 
 	return Vec3(0.0f); // Exceeded max depth
 }

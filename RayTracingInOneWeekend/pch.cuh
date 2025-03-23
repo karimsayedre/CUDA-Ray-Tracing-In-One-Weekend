@@ -41,7 +41,8 @@ inline Float	Pi		 = __float2half(3.1415926535897932385f);
 
 constexpr float CUDART_INF_F = std::numeric_limits<float>::infinity();
 
-using Vec3 = glm::vec<3, Float, glm::packed_mediump>;
+using Vec3 = glm::vec<3, Float, glm::aligned_mediump>;
+//static_assert(alignof(Vec3) == 16, "Unexpected alignment!");
 
 // Boolean multiplication operators for branchless selection
 

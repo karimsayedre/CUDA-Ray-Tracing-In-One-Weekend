@@ -2,9 +2,9 @@
 #include "HittableList.h"
 #include "Ray.h"
 
-struct BVHSoA
+struct alignas(32) BVHSoA
 {
-	struct BVH
+	struct alignas(8) BVH
 	{
 		uint16_t m_left;  // Index of left child (or sphere index for leaves)
 		uint16_t m_right; // Index of right child (unused for leaves)
@@ -16,20 +16,13 @@ struct BVHSoA
 	AABB* m_bounds;
 
 	BVH*	 m_BVHs;
-	uint16_t m_capacity;
 	uint16_t m_count;
 	uint16_t root;
-
-	// Device constructor (not usable from host)
-	__host__ __device__ BVHSoA(uint16_t max_nodes)
-		: m_capacity(max_nodes), m_count(0), root(0)
-	{
-	}
 
 	// Host function to initialize device memory
 	__host__ inline static void Init(BVHSoA*& d_bvh, uint16_t maxNodes)
 	{
-		BVHSoA h_bvh(maxNodes); // Temporary host instance
+		BVHSoA h_bvh; // Temporary host instance
 
 		// Allocate memory for arrays on the device
 		// CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_left, maxNodes * sizeof(uint16_t)));
@@ -42,7 +35,7 @@ struct BVHSoA
 
 		CHECK_CUDA_ERRORS(cudaMalloc(&h_bvh.m_BVHs, maxNodes * sizeof(BVH)));
 
-		h_bvh.m_capacity = maxNodes;
+		//h_bvh.m_capacity = maxNodes;
 		h_bvh.m_count	 = 0;
 		h_bvh.root		 = 0;
 
