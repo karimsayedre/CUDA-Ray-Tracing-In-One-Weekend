@@ -1,7 +1,6 @@
 #pragma once
 
 #include <mutex>
-#include <condition_variable>
 #include <atomic>
 #include <SFML/System/Thread.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
@@ -11,40 +10,38 @@
 #include <SFML/Graphics/Image.hpp>
 #include "CudaRenderer.cuh"
 
-inline sf::Image Render(const uint32_t width, const uint32_t height)
+#include <atomic>
+#include <mutex>
+#include <SFML/Graphics.hpp>
+#include <fmt/core.h>
+
+inline static sf::Image image; // Global to prevent copy when returning from Render function
+
+inline void Render(const uint32_t width, const uint32_t height)
 {
-	// Image
 	constexpr int	samplesPerPixel = 30;
-	constexpr float colorMul		= 1.0f / (float)samplesPerPixel;
+	constexpr float colorMul		= 1.0f / static_cast<float>(samplesPerPixel);
 	constexpr int	maxDepth		= 50;
 
-	std::atomic_bool isRunning = true;
-
-	std::mutex				frameMutex;
-	std::condition_variable frameCV;
+	std::atomic_bool		isRunning {true};
+	std::atomic<Dimensions> sharedDimensions {{width, height}};
+	std::atomic_bool		imageResized {false};
+	std::mutex				imageMutex;
+	std::atomic<float>		frameTime {0.0f};
 	std::atomic_bool		frameReady {false};
-	// Render
-	sf::Image image;
-	image.create(width, height);
-	sf::Thread OpenGLThread([&]()
+
+	image.create(sharedDimensions.load().Width, sharedDimensions.load().Height);
+
+	sf::Thread thread([&]
 	{
-		sf::RenderWindow window(sf::VideoMode(width, height), "Ray Tracing In A Weekend!");
+		sf::RenderWindow window(sf::VideoMode(sharedDimensions.load().Width, sharedDimensions.load().Height), "Ray Tracing In A Weekend!");
 		sf::Texture		 texture;
-		texture.create(width, height);
-		texture.update(image);
+		texture.create(sharedDimensions.load().Width, sharedDimensions.load().Height);
 		sf::Sprite sprite(texture);
 
 		while (window.isOpen())
 		{
-			// Wait until the main thread signals a new frame is ready.
-			{
-				std::unique_lock<std::mutex> lock(frameMutex);
-				frameCV.wait(lock, [&frameReady]()
-				{
-					return frameReady.load();
-				});
-				frameReady = false; // Reset for next frame.
-			}
+			frameReady.wait(false);
 
 			sf::Event event;
 			while (window.pollEvent(event))
@@ -53,37 +50,70 @@ inline sf::Image Render(const uint32_t width, const uint32_t height)
 				{
 					window.close();
 					isRunning = false;
-					break;
+				}
+				else if (event.type == sf::Event::Resized)
+				{
+					const auto newWidth	 = std::max(event.size.width, 1u);
+					const auto newHeight = std::max(event.size.height, 1u);
+
+					{
+						std::lock_guard lock(imageMutex);
+						image.create(newWidth, newHeight);
+						texture.create(newWidth, newHeight);
+						sprite.setTexture(texture, true);
+					}
+
+					window.setView(sf::View(sf::FloatRect(0, 0, static_cast<float>(newWidth), static_cast<float>(newHeight))));
+
+					sharedDimensions.store({newWidth, newHeight}, std::memory_order_release);
+					imageResized.store(true, std::memory_order_release);
 				}
 			}
 
-			texture.loadFromImage(image);
+			{
+				std::lock_guard lock(imageMutex);
+				texture.loadFromImage(image);
+			}
+
+			const auto dims = sharedDimensions.load(std::memory_order_acquire);
+			window.setTitle(fmt::format("Ray Tracing! {}x{} | {:.3f}ms", dims.Width, dims.Height, frameTime.load()));
 			window.draw(sprite);
 
 			window.display();
+			frameReady.store(false, std::memory_order_release);
 		}
 	});
-	OpenGLThread.launch();
 
-	CudaRenderer cudaRenderer(width, height, samplesPerPixel, maxDepth, colorMul);
+	thread.launch();
+
+	CudaRenderer cudaRenderer(sharedDimensions, samplesPerPixel, maxDepth, colorMul);
+	Dimensions	 cachedDims = sharedDimensions.load(std::memory_order_acquire);
+
 	while (isRunning)
 	{
-		cudaRenderer.Render();
+		if (imageResized.exchange(false, std::memory_order_acq_rel))
+		{
+			const auto newDims = sharedDimensions.load(std::memory_order_acquire);
+			if (newDims.Width != cachedDims.Width || newDims.Height != cachedDims.Height)
+			{
+				cachedDims = newDims;
+				cudaRenderer.ResizeImage(newDims.Width, newDims.Height);
+			}
+		}
 
-		cudaResourceDesc resDesc;
-		cudaGetSurfaceObjectResourceDesc(&resDesc, cudaRenderer.GetDeviceImage());
-		cudaArray_t cuArray = resDesc.res.array.array;
-		cudaMemcpy2DFromArray((void*)image.getPixelsPtr(), width * 4, cuArray, 0, 0, width * 4, height, cudaMemcpyDeviceToHost);
+		frameTime.store(cudaRenderer.Render(cachedDims.Width, cachedDims.Height).count(), std::memory_order_release);
 
 		{
-			//  Notify the OpenGL thread a new frame is ready:
-			std::unique_lock<std::mutex> lock(frameMutex);
-			frameReady = true;
+			std::lock_guard lock(imageMutex);
+			if (image.getSize().x == cachedDims.Width && image.getSize().y == cachedDims.Height)
+			{
+				CHECK_CUDA_ERRORS(cudaMemcpy2DFromArray((void*)image.getPixelsPtr(), cachedDims.Width * 4, cudaRenderer.GetImageArray(), 0, 0, cachedDims.Width * 4, cachedDims.Height, cudaMemcpyDeviceToHost));
+			}
 		}
-		frameCV.notify_one();
+
+		frameReady.store(true, std::memory_order_release);
+		frameReady.notify_one();
 	}
 
-	OpenGLThread.wait();
-
-	return image;
+	thread.wait();
 }

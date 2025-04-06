@@ -4,12 +4,6 @@
 class Camera
 {
   public:
-	Vec3				m_Origin;
-	Vec3				m_LowerLeftCorner;
-	Vec3				m_Horizontal;
-	Vec3				m_Vertical;
-	Vec3				m_LookAt;
-	float				m_OriginalOffset;
 	__device__ __host__ Camera(const Vec3& lookFrom, const Vec3& lookAt, const Vec3& up, const float vFov, const float aspectRatio)
 		: m_LookAt(lookAt), m_OriginalOffset(lookFrom.x)
 	{
@@ -28,7 +22,22 @@ class Camera
 		m_LowerLeftCorner = m_Origin - m_Horizontal / 2.0f - m_Vertical / 2.0f - w;
 	}
 
-	__device__ __host__ void Translate(const Vec3& offset, const float resetPoint)
+	__device__ __host__ void ResizeViewport(const float newAspectRatio)
+	{
+		const float currentViewportHeight = glm::length(m_Vertical);
+
+		const float newViewportWidth = newAspectRatio * currentViewportHeight;
+
+		const Vec3 w = glm::normalize(m_Origin - m_LookAt);
+		const Vec3 u = glm::normalize(m_Horizontal);
+		const Vec3 v = glm::cross(w, u);
+
+		m_Horizontal = u * newViewportWidth;
+
+		m_LowerLeftCorner = m_Origin - m_Horizontal / 2.0f - m_Vertical / 2.0f - w;
+	}
+
+	__device__ __host__ void MoveAndLookAtSamePoint(const Vec3& offset, const float resetPoint)
 	{
 		if (m_Origin.x > resetPoint + m_OriginalOffset)
 		{
@@ -42,8 +51,16 @@ class Camera
 		m_LowerLeftCorner = m_Origin - m_Horizontal / 2.0f - m_Vertical / 2.0f - w;
 	}
 
-	__device__ __host__ Ray GetRay(float u, float v) const
+	__device__ __host__ Ray GetRay(const float u, const float v) const
 	{
 		return {m_Origin, m_LowerLeftCorner + u * m_Horizontal + v * m_Vertical - m_Origin};
 	}
+
+  private:
+	Vec3  m_Origin;
+	Vec3  m_LowerLeftCorner;
+	Vec3  m_Horizontal;
+	Vec3  m_Vertical;
+	Vec3  m_LookAt;
+	float m_OriginalOffset;
 };

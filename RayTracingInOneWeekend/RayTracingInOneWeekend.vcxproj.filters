@@ -51,16 +51,7 @@
     <ClInclude Include="pch.cuh">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Interval.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Debug.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Cuda.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Raytracer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -74,12 +65,6 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="CUDARender.cu">
-      <Filter>Source Files</Filter>
-    </CudaCompile>
-    <CudaCompile Include="BVH.cu">
-      <Filter>Source Files</Filter>
-    </CudaCompile>
-    <CudaCompile Include="Raytracer.cu">
       <Filter>Source Files</Filter>
     </CudaCompile>
   </ItemGroup>

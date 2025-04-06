@@ -1,61 +1,70 @@
 #pragma once
 #include "pch.cuh"
-#include <glm/glm.hpp>
-#include <corecrt_math.h>
-#include <cuda_runtime.h>
-#include <curand_kernel.h>
-#include <iostream>
 #include <SFML/Graphics/Image.hpp>
-
 #include "Camera.cuh"
 
 #if 1
+__host__ void CheckCuda(cudaError_t result, char const* const func, const char* const file, int const line);
 #define CHECK_CUDA_ERRORS(val) CheckCuda((val), #val, __FILE__, __LINE__)
 #else
 #define CHECK_CUDA_ERRORS(val) (val)
 #endif
 
-struct HittableList;
-struct Materials;
-struct BVHSoA;
+namespace BVH
+{
+	struct BVHSoA;
+}
+
+namespace Hitables
+{
+	struct HittableList;
+}
+
+namespace Mat
+{
+	struct Materials;
+}
+
+struct Dimensions
+{
+	uint32_t Width;
+	uint32_t Height;
+};
 
 struct HitRecord
 {
 	Vec3	 Location;
 	Vec3	 Normal;
-	float	 T;
-	uint16_t MaterialIndex;
+	uint16_t PrimitiveIndex;
 };
-
-class Camera;
-__host__ void CheckCuda(cudaError_t result, char const* const func, const char* const file, int const line);
 
 class CudaRenderer
 {
   public:
-	__host__ CudaRenderer(const uint32_t width, const uint32_t height, const uint32_t samplesPerPixel, const uint32_t maxDepth, const float colorMul);
+	__host__ CudaRenderer(const Dimensions dims, const uint32_t samplesPerPixel, const uint32_t maxDepth, const float colorMul);
 
-	__host__ void Render() const;
+	__host__ void ResizeImage(const uint32_t width, const uint32_t height);
+
+	__host__ std::chrono::duration<float, std::milli> Render(const uint32_t width, const uint32_t height) const;
 
 	__host__ ~CudaRenderer();
 
-	__host__ auto GetDeviceImage() const
+	cudaArray_const_t GetImageArray() const
 	{
-		return d_Image;
+		return d_ImageArray;
 	}
 
   private: // device pointers
-	HittableList* d_List {};
-	BVHSoA*		  d_World {};
-	Materials*	  d_Materials {};
-	Camera*		  d_Camera {};
+	Hitables::HittableList* d_List {};
+	BVH::BVHSoA*			d_World {};
+	Mat::Materials*			d_Materials {};
+	Camera*					d_Camera {};
 
 	uint32_t*			d_RandSeeds {};
 	cudaSurfaceObject_t d_Image {};
+	cudaArray_t			d_ImageArray {};
 
   private: // host variables
-	uint32_t	   m_Width;
-	uint32_t	   m_Height;
 	uint32_t	   m_SamplesPerPixel;
 	uint32_t	   m_MaxDepth;
 	float		   m_ColorMul;

@@ -6,7 +6,7 @@
 #if 0
 __device__ inline void DebugBVHNode(BVHSoA* soa, uint32_t nodeIndex, int depth = 0)
 {
-	if (nodeIndex >= soa->m_Count)
+	if (nodeIndex >= soa->Count)
 	{
 		printf("Invalid node index: %u\n", nodeIndex);
 		return;
@@ -76,7 +76,7 @@ __device__ inline void DebugTraversal(const Ray& ray, BVHSoA* world, HittableLis
 				   rec.Normal.x,
 				   rec.Normal.y,
 				   rec.Normal.z,
-				   rec.MaterialIndex);
+				   rec.PrimitiveIndex);
 		}
 	}
 }

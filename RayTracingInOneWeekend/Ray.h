@@ -3,7 +3,6 @@
 class Ray
 {
   public:
-	Ray() noexcept = default;
 	[[nodiscard]] __device__ Ray(const Vec3& origin, const Vec3& direction) noexcept
 		: m_Origin(origin), m_Direction(direction)
 	{
@@ -18,7 +17,7 @@ class Ray
 		return m_Direction;
 	}
 
-	[[nodiscard]] __device__ Vec3 PointAtT(const float t) const
+	[[nodiscard]] __device__ Vec3 PointAtT(const float t) const noexcept
 	{
 		return m_Origin + t * m_Direction;
 	}

@@ -3,16 +3,23 @@
 #include "AABB.h"
 #include "CudaRenderer.cuh"
 
-struct HittableList
+namespace Hitables
 {
-  public:
-	__host__ inline static void Init(HittableList*& d_HittableList, const uint32_t capacity)
+
+	struct HittableList
+	{
+		Vec3*	 Centers;
+		float*	 Radii;
+		AABB*	 AABBs;
+		uint16_t Count = 0;
+	};
+
+	__host__ inline void InitHittableList(HittableList*& d_HittableList, const uint32_t capacity)
 	{
 		HittableList h_HittableList;
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_HittableList.m_Center, capacity * sizeof(Vec3)));
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_HittableList.m_Radius, capacity * sizeof(float)));
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_HittableList.m_AABB, capacity * sizeof(AABB)));
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_HittableList.m_MaterialIndex, capacity * sizeof(uint32_t)));
+		CHECK_CUDA_ERRORS(cudaMalloc(&h_HittableList.Centers, capacity * sizeof(Vec3)));
+		CHECK_CUDA_ERRORS(cudaMalloc(&h_HittableList.Radii, capacity * sizeof(float)));
+		CHECK_CUDA_ERRORS(cudaMalloc(&h_HittableList.AABBs, capacity * sizeof(AABB)));
 
 		// Allocate memory for BVH structure on the device
 		CHECK_CUDA_ERRORS(cudaMalloc(&d_HittableList, sizeof(HittableList)));
@@ -21,21 +28,20 @@ struct HittableList
 		CHECK_CUDA_ERRORS(cudaMemcpy(d_HittableList, &h_HittableList, sizeof(HittableList), cudaMemcpyHostToDevice));
 	}
 
-	__device__ void Add(const Vec3& position, const float radius)
+	__device__ inline void Add(HittableList* list, const Vec3& position, const float radius)
 	{
-		m_Center[m_Count]		 = position;
-		m_Radius[m_Count]		 = radius;
-		m_AABB[m_Count]			 = AABB(position - radius, position + radius);
-		m_MaterialIndex[m_Count] = m_Count;
-		m_Count++;
+		list->Centers[list->Count] = position;
+		list->Radii[list->Count]   = radius;
+		list->AABBs[list->Count]   = AABB(position - radius, position + radius);
+		list->Count++;
 	}
 
-	__device__ bool Hit(const Ray& ray, const float tMin, float& tMax, HitRecord& record, const uint32_t sphereIndex) const
+	__device__ inline bool IntersectPrimitive(const HittableList* list, const Ray& ray, const float tMin, float& tMax, HitRecord& record, const uint16_t sphereIndex)
 	{
-		const Vec3	oc			 = ray.Origin() - m_Center[sphereIndex];
+		const Vec3	oc			 = ray.Origin() - list->Centers[sphereIndex];
 		const float a			 = glm::dot(ray.Direction(), ray.Direction());
 		const float b			 = glm::dot(oc, ray.Direction());
-		const float c			 = glm::dot(oc, oc) - m_Radius[sphereIndex] * m_Radius[sphereIndex];
+		const float c			 = glm::dot(oc, oc) - list->Radii[sphereIndex] * list->Radii[sphereIndex];
 		const float discriminant = b * b - a * c;
 
 		if (discriminant <= 0.0f)
@@ -51,29 +57,12 @@ struct HittableList
 			return false;
 
 		// Compute intersection data
-		record.T			 = t;
-		record.Location		 = ray.PointAtT(t);
-		record.Normal		 = (record.Location - m_Center[sphereIndex]) * (1.0f / m_Radius[sphereIndex]); // Normalize using multiplication
-		record.MaterialIndex = m_MaterialIndex[sphereIndex];
+		record.Location		  = ray.PointAtT(t);
+		record.Normal		  = (record.Location - list->Centers[sphereIndex]) * (1.0f / list->Radii[sphereIndex]); // Normalize using multiplication
+		record.PrimitiveIndex = sphereIndex;
 
-		tMax = t;
-
+		tMax = t; // Update tMax for the next intersection test
 		return true;
 	}
 
-	__device__ [[nodiscard]] uint16_t GetPrimitiveCount() const
-	{
-		return m_Count;
-	}
-
-  private:
-	Vec3*	  m_Center;
-	float*	  m_Radius;
-	uint16_t* m_MaterialIndex;
-	AABB*	  m_AABB;
-
-	uint16_t m_Count = 0;
-
-	friend struct BVHSoA;
-	friend struct BVHSoARopes;
-};
+} // namespace

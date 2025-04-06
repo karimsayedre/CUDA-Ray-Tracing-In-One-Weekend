@@ -1,21 +1,10 @@
 #pragma once
-#include "Interval.h"
 
-class alignas(16) AABB
+struct alignas(32) AABB
 {
-  public:
-	Vec3 Min;
-	Vec3 Max;
-
 	__device__ AABB()
 		: Min(std::numeric_limits<float>::max()),
 		  Max(-std::numeric_limits<float>::max())
-	{
-	}
-
-	__device__ AABB(const Interval& ix, const Interval& iy, const Interval& iz)
-		: Min(Vec3(ix.Min, iy.Min, iz.Min)),
-		  Max(Vec3(ix.Max, iy.Max, iz.Max))
 	{
 	}
 
@@ -43,15 +32,17 @@ class alignas(16) AABB
 	{
 		return (Min + Max) * 0.5f;
 	}
+
+	Vec3 Min;
+	Vec3 Max;
 };
 
-__device__ inline AABB operator+(const AABB& bbox, const Vec3& offset)
+__device__ inline AABB operator+(const AABB& box, const Vec3& offset)
 {
-	return {bbox.Min + offset, bbox.Max + offset};
+	return {box.Min + offset, box.Max + offset};
 }
 
-__device__ inline AABB operator+(const Vec3& offset, const AABB& bbox)
+__device__ inline AABB operator+(const Vec3& offset, const AABB& box)
 {
-	return bbox + offset;
+	return box + offset;
 }
-
