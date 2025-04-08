@@ -24,9 +24,8 @@ inline void Render(const uint32_t width, const uint32_t height)
 	constexpr int	maxDepth		= 50;
 
 	std::atomic_bool		isRunning {true};
-	std::atomic<Dimensions> sharedDimensions {{width, height}};
-	std::atomic_bool		imageResized {false};
 	std::mutex				imageMutex;
+	std::atomic<Dimensions> sharedDimensions {{width, height}};
 	std::atomic<float>		frameTime {0.0f};
 	std::atomic_bool		frameReady {false};
 
@@ -53,8 +52,8 @@ inline void Render(const uint32_t width, const uint32_t height)
 				}
 				else if (event.type == sf::Event::Resized)
 				{
-					const auto newWidth	 = std::max(event.size.width, 1u);
-					const auto newHeight = std::max(event.size.height, 1u);
+					const uint32_t newWidth	 = std::max(event.size.width, 1u);
+					const uint32_t newHeight = std::max(event.size.height, 1u);
 
 					{
 						std::lock_guard lock(imageMutex);
@@ -66,7 +65,6 @@ inline void Render(const uint32_t width, const uint32_t height)
 					window.setView(sf::View(sf::FloatRect(0, 0, static_cast<float>(newWidth), static_cast<float>(newHeight))));
 
 					sharedDimensions.store({newWidth, newHeight}, std::memory_order_release);
-					imageResized.store(true, std::memory_order_release);
 				}
 			}
 
@@ -91,14 +89,11 @@ inline void Render(const uint32_t width, const uint32_t height)
 
 	while (isRunning)
 	{
-		if (imageResized.exchange(false, std::memory_order_acq_rel))
+		const Dimensions newDims = sharedDimensions.load(std::memory_order_acquire);
+		if (newDims.Width != cachedDims.Width || newDims.Height != cachedDims.Height)
 		{
-			const auto newDims = sharedDimensions.load(std::memory_order_acquire);
-			if (newDims.Width != cachedDims.Width || newDims.Height != cachedDims.Height)
-			{
-				cachedDims = newDims;
-				cudaRenderer.ResizeImage(newDims.Width, newDims.Height);
-			}
+			cachedDims = newDims;
+			cudaRenderer.ResizeImage(newDims.Width, newDims.Height);
 		}
 
 		frameTime.store(cudaRenderer.Render(cachedDims.Width, cachedDims.Height).count(), std::memory_order_release);
@@ -107,7 +102,7 @@ inline void Render(const uint32_t width, const uint32_t height)
 			std::lock_guard lock(imageMutex);
 			if (image.getSize().x == cachedDims.Width && image.getSize().y == cachedDims.Height)
 			{
-				CHECK_CUDA_ERRORS(cudaMemcpy2DFromArray((void*)image.getPixelsPtr(), cachedDims.Width * 4, cudaRenderer.GetImageArray(), 0, 0, cachedDims.Width * 4, cachedDims.Height, cudaMemcpyDeviceToHost));
+				CHECK_CUDA_ERRORS(cudaMemcpy2DFromArray((void*)image.getPixelsPtr(), (size_t)cachedDims.Width * 4, cudaRenderer.GetImageArray(), 0, 0, (size_t)cachedDims.Width * 4, cachedDims.Height, cudaMemcpyDeviceToHost));
 			}
 		}
 

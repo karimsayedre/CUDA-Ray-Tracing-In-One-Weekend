@@ -164,7 +164,7 @@ namespace BVH
 
 		// Recursively build children
 		const uint16_t leftIdx	= Build(list, indices, start, bestSplitIdx, bvh);
-		const uint16_t rightIdx = Build(list, indices, bestSplitIdx, end, bvh);
+		const uint16_t rightIdx = Build(list, indices, bestSplitIdx, end, bvh); 
 
 		// Compute the combined bounding box from the actual child nodes
 		AABB		combined  = bvh->m_Bounds[leftIdx];

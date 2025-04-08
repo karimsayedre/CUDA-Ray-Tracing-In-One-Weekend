@@ -74,7 +74,7 @@ __global__ void CreateWorld(Hitables::HittableList* d_List, Mat::Materials* d_Ma
 
 		Mat::Add(d_Materials, Mat::MaterialType::Lambert, Vec3(0.4f, 0.2f, 0.1f), 0.0f, 1.0f);
 		Hitables::Add(d_List, Vec3(-4, 1, 0), 1.0f);
-
+		 
 		Mat::Add(d_Materials, Mat::MaterialType::Metal, Vec3(0.7f, 0.6f, 0.5f), 0.0f, 1.0f);
 		Hitables::Add(d_List, Vec3(4, 1, 0), 1.0f);
 
@@ -226,7 +226,7 @@ __host__ std::chrono::duration<float, std::milli> CudaRenderer::Render(const uin
 	CHECK_CUDA_ERRORS(cudaMemcpy(d_Camera, &m_Camera, sizeof(Camera), cudaMemcpyHostToDevice));
 	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 
-	dim3 block(8, 8);
+	dim3 block(16, 6);
 	dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
 
 	// Create CUDA events for timing
