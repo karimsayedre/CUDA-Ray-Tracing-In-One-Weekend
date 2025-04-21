@@ -1,0 +1,27 @@
+#pragma once
+
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <curand_kernel.h>
+#include <device_launch_parameters.h>
+#include <glm/glm.hpp>
+#include <vector>
+#include <cmath>
+#include <limits>
+#include <numbers>
+#include <thrust/sort.h>
+#include <cuda_fp16.h>
+#include "surface_functions.h"
+#include <cuda_surface_types.h>
+#include <math.h>
+
+#ifdef __CUDACC__
+#if (GLM_COMPILER & GLM_COMPILER_CUDA)
+#pragma message("CUDA compiler detected")
+#else 
+#error("CUDA compiler NOT detected")
+#endif
+#endif
+
+
+using Vec3 = glm::vec<3, float, glm::aligned_mediump>;
