@@ -15,6 +15,7 @@
 #include <cuda_surface_types.h>
 #include <math.h>
 
+
 #ifdef __CUDACC__
 #if (GLM_COMPILER & GLM_COMPILER_CUDA)
 #pragma message("CUDA compiler detected")

@@ -11,6 +11,16 @@ __host__ void CheckCuda(cudaError_t result, char const* const func, const char* 
 #define CHECK_CUDA_ERRORS(val) (val)
 #endif
 
+#define CHECK_BOOL(val)     \
+	do                      \
+	{                       \
+		if (!(val))         \
+		{                   \
+			__debugbreak(); \
+			assert(false);  \
+		}                   \
+	} while (false)
+
 namespace BVH
 {
 	struct BVHSoA;
@@ -25,7 +35,6 @@ namespace Mat
 {
 	struct Materials;
 }
-
 
 struct alignas(64) HitRecord
 {
@@ -56,26 +65,18 @@ class CudaRenderer
 	__host__ CudaRenderer(const sf::Vector2u dims, const uint32_t samplesPerPixel, const uint32_t maxDepth, const float colorMul);
 
 	__host__ void ReleaseResizables() const;
-	void          ResizeImage(const sf::Vector2u dims);
+	void		  ResizeImage(const sf::Vector2u dims, cudaSurfaceObject_t surface);
 
-	__host__ void							 CopyDeviceData() const;
-	std::chrono::duration<float, std::milli> Render(const uint32_t width, const uint32_t height) const;
+	__host__ void							 CopyDeviceData(const cudaSurfaceObject_t imageSurface);
+	std::chrono::duration<float, std::milli> Render(const sf::Vector2u& size, cudaSurfaceObject_t surface);
 
 	__host__ ~CudaRenderer();
-
-	cudaArray_const_t GetImageArray() const
-	{
-		return d_ImageArray;
-	}
 
   private: // device pointers
 	Hitables::PrimitiveList* dp_List {};
 	BVH::BVHSoA*			 dp_BVH {};
 	Mat::Materials*			 dp_Materials {};
 	uint32_t*				 dp_RandSeeds {};
-
-	cudaSurfaceObject_t dp_Image {};
-	cudaArray_t			d_ImageArray {};
 
   private: // host variables
 	uint32_t	   m_SamplesPerPixel;
@@ -86,4 +87,9 @@ class CudaRenderer
 	sf::Vector2u m_Dims {};
 
 	cudaEvent_t m_StartEvent, m_EndEvent;
+
+	RenderParams h_Params;
+
+  public:
+	cudaGraphicsResource* cudaResource = nullptr;
 };

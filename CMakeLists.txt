@@ -56,13 +56,34 @@ target_link_libraries(${PROJECT_NAME}
 # Add option to enable sanitizer for all configurations
 option(USE_COMPUTE_SANITIZER "Use CUDA Compute Sanitizer for all configurations" OFF)
 
-# Apply sanitizer if enabled
-if(MSVC AND USE_COMPUTE_SANITIZER)
-  message(STATUS "Enabling CUDA Compute Sanitizer for all configurations")
-  set_target_properties(${PROJECT_NAME} PROPERTIES
-    VS_DEBUGGER_COMMAND "${COMPUTE_SANITIZER_PATH}"
-    VS_DEBUGGER_COMMAND_ARGUMENTS "--tool memcheck --report-api-errors all --target-processes all \"$<TARGET_FILE:${PROJECT_NAME}>\""
-  )
+if(USE_COMPUTE_SANITIZER)
+  # Manually derive CUDA_PATH from CUDAToolkit_BIN_DIR
+  get_filename_component(CUDA_PATH "${CUDAToolkit_BIN_DIR}" DIRECTORY)
+  message(STATUS "CUDA_PATH=${CUDA_PATH}")
+
+  # Use CUDA Toolkit variables directly
+  message(STATUS "CUDA Version: ${CUDAToolkit_VERSION}")
+  message(STATUS "CUDA Binaries: ${CUDAToolkit_BIN_DIR}")
+
+  if(NOT EXISTS "${CUDA_PATH}/compute-sanitizer/compute-sanitizer.exe")
+    # Fallback for older CUDA versions (pre-11.6)
+    if(EXISTS "${CUDA_PATH}/bin/compute-sanitizer.exe")
+      set(COMPUTE_SANITIZER_PATH "${CUDA_PATH}/bin/compute-sanitizer.exe")
+    else()
+      message(FATAL_ERROR "compute-sanitizer not found in CUDA installation at:\n  ${CUDA_PATH}")
+    endif()
+  else()
+    set(COMPUTE_SANITIZER_PATH "${CUDA_PATH}/compute-sanitizer/compute-sanitizer.exe")
+  endif()
+
+  # Apply sanitizer if enabled
+  if(MSVC AND USE_COMPUTE_SANITIZER)
+    message(STATUS "Enabling CUDA Compute Sanitizer for all configurations")
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+      VS_DEBUGGER_COMMAND "${COMPUTE_SANITIZER_PATH}"
+      VS_DEBUGGER_COMMAND_ARGUMENTS "--tool memcheck --report-api-errors all --target-processes all \"$<TARGET_FILE:${PROJECT_NAME}>\""
+    )
+  endif()
 endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Vendor/glm)
@@ -138,6 +159,9 @@ target_compile_options(${PROJECT_NAME} PRIVATE
 
   $<$<AND:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>,$<COMPILE_LANGUAGE:CUDA>>:
   --use_fast_math
+  -fmad=true
+  -prec-sqrt=false
+  -prec-div=false
   >
 
   $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:

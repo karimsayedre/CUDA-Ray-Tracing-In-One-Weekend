@@ -179,16 +179,16 @@ __host__ CudaRenderer::CudaRenderer(const sf::Vector2u dims, const uint32_t samp
 	dp_Materials = Mat::Init(numHitables);
 	dp_BVH		 = BVH::Init(numHitables * 2 - 1);
 
-	CopyDeviceData();
+	CopyDeviceData(0);
 
 	CreateWorld<<<1, 1>>>();
 	CHECK_CUDA_ERRORS(cudaGetLastError());
 	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 
-	ResizeImage(dims);
+	ResizeImage(dims, 0);
 }
 
-void CudaRenderer::ResizeImage(const sf::Vector2u dims)
+void CudaRenderer::ResizeImage(const sf::Vector2u dims, cudaSurfaceObject_t surface)
 {
 	if (m_Dims == dims)
 		return;
@@ -197,21 +197,7 @@ void CudaRenderer::ResizeImage(const sf::Vector2u dims)
 	m_Dims = dims;
 
 	// Ensure all prior operations are complete
-	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 	CHECK_CUDA_ERRORS(cudaMalloc((void**)&dp_RandSeeds, m_Dims.x * m_Dims.y * sizeof(uint32_t)));
-
-	// Allocate CUDA array
-	const cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<uchar4>();
-	CHECK_CUDA_ERRORS(cudaMallocArray(&d_ImageArray, &channelDesc, m_Dims.x, m_Dims.y, cudaArraySurfaceLoadStore));
-
-	// Create surface object
-	cudaResourceDesc resDesc;
-	resDesc.resType			= cudaResourceTypeArray;
-	resDesc.res.array.array = d_ImageArray;
-
-	CHECK_CUDA_ERRORS(cudaCreateSurfaceObject(&dp_Image, &resDesc));
-
-	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 
 	// Update camera with new aspect ratio
 	m_Camera.ResizeViewport(float(m_Dims.x) / float(m_Dims.y));
@@ -223,25 +209,25 @@ void CudaRenderer::ResizeImage(const sf::Vector2u dims)
 	CHECK_CUDA_ERRORS(cudaGetLastError());
 	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 
-	CopyDeviceData();
+	CopyDeviceData(surface);
 }
 
-__host__ std::chrono::duration<float, std::milli> CudaRenderer::Render(const uint32_t width, const uint32_t height) const
+__host__ std::chrono::duration<float, std::milli> CudaRenderer::Render(const sf::Vector2u& size, cudaSurfaceObject_t surface)
 {
 	dim3 block(8, 8);
-	dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
+	dim3 grid((size.x + block.x - 1) / block.x, (size.y + block.y - 1) / block.y);
 
 	// m_Camera.MoveAndLookAtSamePoint({0.1f, 0.0f, 0.f}, 10.0f);
 
-	CopyDeviceData();
+	CopyDeviceData(surface);
 
 	// Record start event and launch kernel
 	CHECK_CUDA_ERRORS(cudaEventRecord(m_StartEvent));
 	RenderKernel<<<grid, block>>>();
 	CHECK_CUDA_ERRORS(cudaGetLastError()); // Check for launch errors
+	CHECK_CUDA_ERRORS(cudaEventRecord(m_EndEvent));
 
 	// Record end event and synchronize
-	CHECK_CUDA_ERRORS(cudaEventRecord(m_EndEvent));
 	CHECK_CUDA_ERRORS(cudaEventSynchronize(m_EndEvent));
 
 	// Calculate elapsed time
@@ -251,27 +237,25 @@ __host__ std::chrono::duration<float, std::milli> CudaRenderer::Render(const uin
 	return std::chrono::duration<float, std::milli>(elapsedTimeMs);
 }
 
-void CudaRenderer::CopyDeviceData() const
+void CudaRenderer::CopyDeviceData(const cudaSurfaceObject_t imageSurface)
 {
-	RenderParams h_params;
-	h_params.Image			   = dp_Image;
-	h_params.BVH			   = dp_BVH;
-	h_params.List			   = dp_List;
-	h_params.Materials		   = dp_Materials;
-	h_params.ResolutionInfo	   = float4 {1.0f / (float)m_Dims.x, 1.0f / (float)m_Dims.y, (float)m_Dims.x, (float)m_Dims.y};
-	h_params.Camera			   = reinterpret_cast<CameraPOD&>(m_Camera);
-	h_params.RandSeeds		   = dp_RandSeeds;
-	h_params.m_ColorMul		   = m_ColorMul;
-	h_params.m_MaxDepth		   = m_MaxDepth;
-	h_params.m_SamplesPerPixel = m_SamplesPerPixel;
+	h_Params.Image			   = imageSurface;
+	h_Params.BVH			   = dp_BVH;
+	h_Params.List			   = dp_List;
+	h_Params.Materials		   = dp_Materials;
+	h_Params.ResolutionInfo	   = float4 {1.0f / (float)m_Dims.x, 1.0f / (float)m_Dims.y, (float)m_Dims.x, (float)m_Dims.y};
+	h_Params.Camera			   = reinterpret_cast<CameraPOD&>(m_Camera);
+	h_Params.RandSeeds		   = dp_RandSeeds;
+	h_Params.m_ColorMul		   = m_ColorMul;
+	h_Params.m_MaxDepth		   = m_MaxDepth;
+	h_Params.m_SamplesPerPixel = m_SamplesPerPixel;
 
-	CHECK_CUDA_ERRORS(cudaMemcpyToSymbol(d_Params, &h_params, sizeof(RenderParams)));
+	CHECK_CUDA_ERRORS(cudaMemcpyToSymbol(d_Params, &h_Params, sizeof(RenderParams)));
 }
 
 void CudaRenderer::ReleaseResizables() const
 {
 	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
-	CHECK_CUDA_ERRORS(cudaDestroySurfaceObject(dp_Image));
 	if (dp_RandSeeds)
 		CHECK_CUDA_ERRORS(cudaFree(dp_RandSeeds));
 }

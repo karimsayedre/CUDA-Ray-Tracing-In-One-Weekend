@@ -1,5 +1,4 @@
 #pragma once
-
 #include <mutex>
 #include <atomic>
 #include <SFML/Graphics/RenderWindow.hpp>
@@ -8,109 +7,84 @@
 #include <SFML/Window.hpp>
 #include <SFML/Window/Event.hpp>
 #include <SFML/Graphics/Image.hpp>
+
 #include "CudaRenderer.h"
+#include "CudaGLSurface.h"
 
-extern sf::Image image; // Global to prevent copy when returning from Render function
-
-inline void Render(const uint32_t width, const uint32_t height)
+inline sf::Image Render(const uint32_t initialWidth, const uint32_t initialHeight)
 {
-	constexpr int	samplesPerPixel = 30;
-	constexpr float colorMul		= 1.0f / static_cast<float>(samplesPerPixel);
-	constexpr int	maxDepth		= 50;
+	// constant settings
+	constexpr uint32_t samplesPerPixel = 30;
+	constexpr float	   colorMul		   = 1.0f / static_cast<float>(samplesPerPixel);
+	constexpr uint32_t maxDepth		   = 50;
 
-	std::atomic_bool		  isRunning {true};
-	std::mutex				  imageMutex;
-	std::atomic<sf::Vector2u> sharedDimensions {{width, height}};
-	std::atomic<float>		  frameTime {0.0f};
-	std::atomic_bool		  frameReady {false};
+	// Shared state
+	std::atomic<bool>		  isRunning {true};
+	std::atomic<sf::Vector2u> sharedDimensions {{initialWidth, initialHeight}};
+	float					  timeTaken {0.0f}; // no need to be atomic, performance cost for no reason.
 
-	image.resize(sharedDimensions.load());
+	// Create SFML window in main thread, then deactivate context
+	sf::RenderWindow window(sf::VideoMode(sharedDimensions), "Ray Tracing In One Weekend!", sf::Style::Default, sf::State::Windowed, sf::ContextSettings {.depthBits = 0, .stencilBits = 0, .antiAliasingLevel = 0, .majorVersion = 4, .minorVersion = 3, .attributeFlags = sf::ContextSettings::Default, .sRgbCapable = false});
+	CHECK_BOOL(window.setActive(false));
+	sf::Texture texture;
 
-	std::thread thread([&]
+	// Thread: OpenGL context + CUDA rendering
+	std::jthread renderThread([&]
 	{
-		sf::RenderWindow window(sf::VideoMode(sharedDimensions.load()), "Ray Tracing In One Weekend!");
-		sf::Texture		 texture;
-		if (!texture.resize(sharedDimensions.load()))
-			assert(false && "Failed to create texture");
-		sf::Sprite sprite(texture);
+		// Activate GL context on this thread
+		CHECK_BOOL(window.setActive(true));
 
-		while (window.isOpen())
+		CHECK_BOOL(texture.resize(sharedDimensions));
+		//texture.setSmooth(true);
+		CudaGLSurface cudaSurface(texture.getNativeHandle());
+
+		CudaRenderer cudaRenderer(sharedDimensions, samplesPerPixel, maxDepth, colorMul);
+		sf::Sprite	 sprite(texture);
+
+		while (isRunning.load(std::memory_order_relaxed))
 		{
-			frameReady.wait(false);
-
-			while (auto event = window.pollEvent())
 			{
-				if (event.value().is<sf::Event::Closed>())
-				{
-					window.close();
-					isRunning = false;
-				}
-				else if (const auto* resized = event->getIf<sf::Event::Resized>())
-				{
-					const uint32_t newWidth	 = std::max(resized->size.x, 1u);
-					const uint32_t newHeight = std::max(resized->size.y, 1u);
+				cudaSurfaceObject_t surface = cudaSurface.BeginFrame();
+				timeTaken					= cudaRenderer.Render(sharedDimensions, surface).count();
+				cudaSurface.EndFrame(surface);
 
-					sf::Vector2u newDims = {newWidth, newHeight};
-
-					// Signal the rendering thread first with the new dimensions
-					sharedDimensions.store(newDims, std::memory_order_release);
-
-					// Then update UI components
-					{
-						std::lock_guard lock(imageMutex);
-						image.resize(newDims);
-						if (!texture.resize(newDims)) // Recreate texture instead of resize
-							assert(false && "Failed to create texture");
-						texture.setSmooth(true);
-						sprite.setTexture(texture, true);
-						window.setView(sf::View(sf::FloatRect({0, 0}, {static_cast<float>(newWidth), static_cast<float>(newHeight)})));
-					}
-
-					// Maybe add a synchronization point here to ensure renderer picks up the change
-					frameReady.store(false, std::memory_order_release);
-				}
+				window.draw(sprite);
+				window.display();
 			}
 
+			// Resize texture if dimensions have changed
+			if (const auto dims = sharedDimensions.load(std::memory_order_acquire); dims.x != texture.getSize().x || dims.y != texture.getSize().y)
 			{
-				std::lock_guard lock(imageMutex);
-				if (!texture.loadFromImage(image))
-					assert(false && "Failed to load texture");
+				cudaSurface.UnregisterSurface();
+				CHECK_BOOL(texture.resize(dims));
+				sprite.setTexture(texture, true);
+				//texture.setSmooth(true);
+				window.setView(sf::View(sf::FloatRect({0.f, 0.f}, (sf::Vector2f)dims)));
+				cudaSurface.Resize(texture.getNativeHandle());
+				cudaRenderer.ResizeImage(dims, 0);
 			}
-
-			const auto [Width, Height] = sharedDimensions.load(std::memory_order_acquire);
-			window.setTitle(fmt::format("Ray Tracing! {}x{} | {:.3f}ms", Width, Height, frameTime.load()));
-			window.draw(sprite);
-
-			window.display();
-			frameReady.store(false, std::memory_order_release);
 		}
 	});
 
-	CudaRenderer cudaRenderer(sharedDimensions, samplesPerPixel, maxDepth, colorMul);
-	sf::Vector2u cachedDims = sharedDimensions.load(std::memory_order_acquire);
-
-	while (isRunning)
+	while (true)
 	{
-		const sf::Vector2u newDims = sharedDimensions.load(std::memory_order_acquire);
-		if (newDims.x != cachedDims.x || newDims.y != cachedDims.y)
+		if (auto event = window.waitEvent(sf::milliseconds(16)))
 		{
-			cachedDims = newDims;
-			cudaRenderer.ResizeImage(newDims);
-		}
-
-		frameTime.store(cudaRenderer.Render(cachedDims.x, cachedDims.y).count(), std::memory_order_release);
-
-		{
-			std::lock_guard lock(imageMutex);
-			if (image.getSize().x == cachedDims.x && image.getSize().y == cachedDims.y)
+			if (event.value().is<sf::Event::Closed>())
 			{
-				CHECK_CUDA_ERRORS(cudaMemcpy2DFromArray((void*)image.getPixelsPtr(), (size_t)cachedDims.x * 4, cudaRenderer.GetImageArray(), 0, 0, (size_t)cachedDims.x * 4, cachedDims.y, cudaMemcpyDeviceToHost));
+				window.close();
+				isRunning = false;
+				break;
+			}
+			else if (const auto* resized = event->getIf<sf::Event::Resized>())
+			{
+				//  Signal the rendering thread first with the new dimensions
+				sharedDimensions.store({std::max(resized->size.x, 1u), std::max(resized->size.y, 1u)}, std::memory_order_release);
 			}
 		}
-
-		frameReady.store(true, std::memory_order_release);
-		frameReady.notify_one();
+		auto dims = sharedDimensions.load(std::memory_order_relaxed);
+		window.setTitle(fmt::format("Ray Tracing! {}x{} | GPU Time: {:.3f}ms", dims.x, dims.y, timeTaken));
 	}
 
-	thread.join();
+	return texture.copyToImage(); // GPU to CPU memory
 }
