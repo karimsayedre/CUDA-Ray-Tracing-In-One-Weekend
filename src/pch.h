@@ -12,6 +12,7 @@
 #include <thrust/sort.h>
 #include <cuda_fp16.h>
 #include "surface_functions.h"
+#include <surface_indirect_functions.h>
 #include <cuda_surface_types.h>
 #include <math.h>
 

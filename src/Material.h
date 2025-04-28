@@ -20,59 +20,71 @@ namespace Mat
 
 		uint32_t Count = 0;
 	};
-
-	__host__ static Materials* Init(const uint32_t maxMaterialCount)
+	
+	template<ExecutionMode M>
+	__host__ inline Materials* Init(const uint32_t capacity)
 	{
 		Materials h_materials;
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.Albedo, maxMaterialCount * sizeof(Vec3)));
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.Flags, maxMaterialCount * sizeof(Vec3)));
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.Fuzz, maxMaterialCount * sizeof(float)));
-		CHECK_CUDA_ERRORS(cudaMalloc(&h_materials.Ior, maxMaterialCount * sizeof(float)));
+		h_materials.Albedo		  = MemPolicy<M>::template Alloc<Vec3>(capacity);
+		h_materials.Flags		  = MemPolicy<M>::template Alloc<Vec3>(capacity);
+		h_materials.Fuzz			  = MemPolicy<M>::template Alloc<float>(capacity);
+		h_materials.Ior			  = MemPolicy<M>::template Alloc<float>(capacity);
 
-		// Allocate memory for BVHNode structure on the device
-		Materials* d_Materials;
-		CHECK_CUDA_ERRORS(cudaMalloc(&d_Materials, sizeof(Materials)));
+		Materials* d_Materials = MemPolicy<M>::template Alloc<Materials>(1);
 
-		// Copy initialized BVHNode data to device
-		CHECK_CUDA_ERRORS(cudaMemcpy(d_Materials, &h_materials, sizeof(Materials), cudaMemcpyHostToDevice));
+		if constexpr (M == ExecutionMode::GPU)
+		{
+			// device allocation + copy
+			CHECK_CUDA_ERRORS(cudaMemcpy(d_Materials, &h_materials, sizeof(Materials), cudaMemcpyHostToDevice));
+		}
+		else
+		{
+			// plain host allocation + copy
+			*d_Materials = h_materials;
+		}
+
 		return d_Materials;
 	}
 
 	// ReSharper disable once CppNonInlineFunctionDefinitionInHeaderFile
-	__device__ void Add(const MaterialType type, const Vec3& albedo, const float fuzz = 0.0f, const float ior = 1.0f)
+	__device__ __host__ inline void Add(const MaterialType type, const Vec3& albedo, const float fuzz = 0.0f, const float ior = 1.0f)
 	{
-		d_Params.Materials->Albedo[d_Params.Materials->Count] = albedo;
-		d_Params.Materials->Fuzz[d_Params.Materials->Count]	  = fuzz;
-		d_Params.Materials->Ior[d_Params.Materials->Count]	  = ior;
+		const auto* params = GetParams();
+
+		params->Materials->Albedo[params->Materials->Count] = albedo;
+		params->Materials->Fuzz[params->Materials->Count]	  = fuzz;
+		params->Materials->Ior[params->Materials->Count]	  = ior;
 
 		// Set material flags based on type
 		switch (type)
 		{
 			case MaterialType::Lambert:
-				d_Params.Materials->Flags[d_Params.Materials->Count].x = 1;
-				d_Params.Materials->Flags[d_Params.Materials->Count].y = 0;
-				d_Params.Materials->Flags[d_Params.Materials->Count].z = 0;
+				params->Materials->Flags[params->Materials->Count].x = 1;
+				params->Materials->Flags[params->Materials->Count].y = 0;
+				params->Materials->Flags[params->Materials->Count].z = 0;
 				break;
 			case MaterialType::Metal:
-				d_Params.Materials->Flags[d_Params.Materials->Count].x = 0;
-				d_Params.Materials->Flags[d_Params.Materials->Count].y = 1;
-				d_Params.Materials->Flags[d_Params.Materials->Count].z = 0;
+				params->Materials->Flags[params->Materials->Count].x = 0;
+				params->Materials->Flags[params->Materials->Count].y = 1;
+				params->Materials->Flags[params->Materials->Count].z = 0;
 				break;
 			case MaterialType::Dielectric:
-				d_Params.Materials->Flags[d_Params.Materials->Count].x = 0;
-				d_Params.Materials->Flags[d_Params.Materials->Count].y = 0;
-				d_Params.Materials->Flags[d_Params.Materials->Count].z = 1;
+				params->Materials->Flags[params->Materials->Count].x = 0;
+				params->Materials->Flags[params->Materials->Count].y = 0;
+				params->Materials->Flags[params->Materials->Count].z = 1;
 				break;
 		}
-		d_Params.Materials->Count++;
+		params->Materials->Count++;
 	}
 
 	// ReSharper disable once CppNonInlineFunctionDefinitionInHeaderFile
-	__device__ bool Scatter(Ray& incomingRay, const HitRecord& rec, Vec3& currAttenuation, uint32_t& randSeed)
+	__device__ __host__ inline bool Scatter(Ray& incomingRay, const HitRecord& rec, Vec3& currAttenuation, uint32_t& randSeed)
 	{
+		const auto* params = GetParams();
+
 		// 1. Get one random vector for all calculations
 		const Vec3 randomVec = RandomVec3(randSeed);
-		currAttenuation *= d_Params.Materials->Albedo[rec.PrimitiveIndex];
+		currAttenuation *= params->Materials->Albedo[rec.PrimitiveIndex];
 
 		// 2. Lambert direction - immediate computation
 		Vec3		lambertDir	  = rec.Normal + randomVec;
@@ -81,12 +93,12 @@ namespace Mat
 
 		// 3. Metal direction - immediate computation
 		const Vec3 reflected = Reflect(incomingRay.Direction, rec.Normal);
-		const Vec3 metalDir	 = reflected + randomVec * d_Params.Materials->Fuzz[rec.PrimitiveIndex];
+		const Vec3 metalDir	 = reflected + randomVec * params->Materials->Fuzz[rec.PrimitiveIndex];
 
 		// 4. Dielectric direction - computation with reused variables
 		Vec3 dielectricDir;
 		{
-			const float ior			  = d_Params.Materials->Ior[rec.PrimitiveIndex];
+			const float ior			  = params->Materials->Ior[rec.PrimitiveIndex];
 			const float dotRayNormal  = dot(incomingRay.Direction, rec.Normal);
 			const bool	frontFace	  = dotRayNormal < 0.0f;
 			const Vec3& outwardNormal = frontFace ? rec.Normal : -rec.Normal;
@@ -101,7 +113,7 @@ namespace Mat
 		}
 
 		// 5. Material weights - compute once
-		const Vec3	flags		   = d_Params.Materials->Flags[rec.PrimitiveIndex];
+		const Vec3	flags		   = params->Materials->Flags[rec.PrimitiveIndex];
 		const float totalWeight	   = flags.x + flags.y + flags.z;
 		const float invTotalWeight = totalWeight > 0.0001f ? 1.0f / totalWeight : 0.0f;
 

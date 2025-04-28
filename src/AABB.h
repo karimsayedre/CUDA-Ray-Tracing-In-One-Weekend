@@ -2,19 +2,19 @@
 
 struct __align__(32) AABB
 {
-	__device__ AABB()
+	__device__ __host__ AABB()
 		: Min(FLT_MAX),
 		  Max(-FLT_MAX)
 	{
 	}
 
-	__device__ AABB(const Vec3& a, const Vec3& b)
+	__device__ __host__ AABB(const Vec3& a, const Vec3& b)
 		: Min(glm::min(a, b)),
 		  Max(glm::max(a, b))
 	{
 	}
 
-	__device__ AABB(const AABB& box0, const AABB& box1)
+	__device__ __host__ AABB(const AABB& box0, const AABB& box1)
 		: Min(glm::min(box0.Min, box1.Min)),
 		  Max(glm::max(box0.Max, box1.Max))
 	{
@@ -28,7 +28,7 @@ struct __align__(32) AABB
 		return 2.0f * (dx * dy + dy * dz + dz * dx);
 	}
 
-	__device__ [[nodiscard]] Vec3 Center() const
+	__device__ __host__ [[nodiscard]] Vec3 Center() const
 	{
 		return (Min + Max) * 0.5f;
 	}

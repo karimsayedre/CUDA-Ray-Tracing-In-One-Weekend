@@ -3,6 +3,7 @@
 #include <SFML/OpenGL.hpp>
 #include <cuda_gl_interop.h>
 
+#include "Renderer.h"
 
 
 struct CudaGLSurface
@@ -38,9 +39,6 @@ struct CudaGLSurface
 	// Call this after any texture resize/recreation with a new OpenGL handle
 	void Resize(const GLuint newTex)
 	{
-		// if (GlTex == newTex)
-		// return; // Skip if handle hasn't changed
-
 		UnregisterSurface();
 		GlTex = newTex;
 		RegisterTexture();
