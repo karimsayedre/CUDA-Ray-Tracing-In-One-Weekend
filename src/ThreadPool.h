@@ -4,37 +4,37 @@
 #include <queue>
 #include <type_traits>
 
-// Simple ThreadPool implementation using C++20 jthread and tile-based tasks
+// Simple ThreadPool implementation using C++20 jthread and tile-based m_Tasks
 class ThreadPool
 {
   public:
-	explicit ThreadPool(size_t threadCount)
+	explicit ThreadPool()
 	{
-		for (size_t i = 0; i < threadCount; ++i)
+		for (size_t i = 0; i < std::thread::hardware_concurrency(); ++i)
 		{
-			workers.emplace_back([this](std::stop_token st)
+			m_Workers.emplace_back([this](const std::stop_token& st)
 			{
-				std::unique_lock<std::mutex> lock(queueMutex, std::defer_lock);
+				std::unique_lock<std::mutex> lock(m_QueueMutex, std::defer_lock);
 				while (true)
 				{
 					std::function<void()> task;
 					{
-						std::lock_guard<std::mutex> guard(queueMutex);
-						if (tasks.empty() && st.stop_requested())
+						std::lock_guard<std::mutex> guard(m_QueueMutex);
+						if (m_Tasks.empty() && st.stop_requested())
 							return;
 					}
 					lock.lock();
-					condition.wait(lock, [&]
+					m_Condition.wait(lock, [&]
 					{
-						return st.stop_requested() || !tasks.empty();
+						return st.stop_requested() || !m_Tasks.empty();
 					});
-					if (st.stop_requested() && tasks.empty())
+					if (st.stop_requested() && m_Tasks.empty())
 					{
 						lock.unlock();
 						return;
 					}
-					task = std::move(tasks.front());
-					tasks.pop();
+					task = std::move(m_Tasks.front());
+					m_Tasks.pop();
 					lock.unlock();
 					task();
 				}
@@ -53,26 +53,35 @@ class ThreadPool
 		});
 		std::future<ReturnType> future = taskPtr->get_future();
 		{
-			std::lock_guard<std::mutex> lock(queueMutex);
-			tasks.emplace([taskPtr]()
+			std::lock_guard<std::mutex> lock(m_QueueMutex);
+			m_Tasks.emplace([taskPtr]()
 			{ (*taskPtr)(); });
 		}
-		condition.notify_one();
+		m_Condition.notify_one();
 		return future;
+	}
+
+	void StopAndClear()
+	{
+		for (auto& worker : m_Workers)
+			worker.request_stop();
+		{
+			std::lock_guard<std::mutex>		  lock(m_QueueMutex);
+			std::queue<std::function<void()>> empty;
+			std::swap(m_Tasks, empty);
+		}
+		m_Condition.notify_all();
 	}
 
 	~ThreadPool()
 	{
-		// Request all threads to stop
-		for (auto& worker : workers)
-			worker.request_stop();
-		condition.notify_all();
+		StopAndClear();
 		// jthread destructor joins
 	}
 
   private:
-	std::vector<std::jthread>		  workers;
-	std::queue<std::function<void()>> tasks;
-	std::mutex						  queueMutex;
-	std::condition_variable			  condition;
+	std::vector<std::jthread>		  m_Workers;
+	std::queue<std::function<void()>> m_Tasks;
+	std::mutex						  m_QueueMutex;
+	std::condition_variable			  m_Condition;
 };

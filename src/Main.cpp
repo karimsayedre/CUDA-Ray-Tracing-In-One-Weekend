@@ -68,6 +68,10 @@ static sf::Image Render(const uint32_t initialWidth, const uint32_t initialHeigh
 				window.setView(sf::View(sf::FloatRect({ 0.f, 0.f }, (sf::Vector2f)dims)));
 				cudaSurface.Resize(texture.getNativeHandle());
 				cudaRenderer.ResizeImage(dims, 0);
+				cudaRenderer.CopyDeviceData(0);
+
+				cpuRenderer.ResizeImage(dims, 0);
+				cpuRenderer.CopyDeviceData(0);
 			}
 		}
 	});
@@ -84,7 +88,7 @@ static sf::Image Render(const uint32_t initialWidth, const uint32_t initialHeigh
 			else if (const auto* resized = event->getIf<sf::Event::Resized>())
 			{
 				//  Signal the rendering thread first with the new dimensions
-				sharedDimensions.store({ std::max(resized->size.x, 1u), std::max(resized->size.y, 1u) }, std::memory_order_consume);
+				sharedDimensions.store({ std::max(resized->size.x, 1u), std::max(resized->size.y, 1u) }, std::memory_order_release);
 			}
 			else if (const auto* keyReleased = event->getIf<sf::Event::KeyReleased>())
 			{

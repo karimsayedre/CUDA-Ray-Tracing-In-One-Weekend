@@ -29,7 +29,7 @@ __host__ std::chrono::duration<float, std::milli> Renderer<ExecutionMode::CPU>::
 
 	CopyDeviceData(0);
 
-	ThreadPool					   pool(std::thread::hardware_concurrency());
+	ThreadPool					   pool;
 	std::vector<std::future<void>> futures;
 
 	// Enqueue one task per tile
@@ -52,7 +52,7 @@ __host__ std::chrono::duration<float, std::milli> Renderer<ExecutionMode::CPU>::
 						for (uint32_t s = 0; s < m_SamplesPerPixel; ++s)
 						{
 							const float2 uv	 = float2 { (x + RandomFloat(seed)) * params->ResolutionInfo.x, 1.0f - (y + RandomFloat(seed)) * params->ResolutionInfo.y };
-							auto		 ray = reinterpret_cast<const Camera&>(params->Camera).GetRay(uv);
+							const Ray	 ray = reinterpret_cast<const Camera&>(params->Camera).GetRay(uv);
 							pixelColor += RayColor(ray, seed);
 						}
 
@@ -67,7 +67,7 @@ __host__ std::chrono::duration<float, std::milli> Renderer<ExecutionMode::CPU>::
 		}
 	}
 
-	// Wait for all tile tasks to complete
+	// Wait for all tile m_Tasks to complete
 	for (auto& f : futures)
 		f.get();
 
