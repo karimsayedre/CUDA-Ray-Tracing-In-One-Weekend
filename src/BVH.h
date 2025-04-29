@@ -334,11 +334,19 @@ namespace BVH
 		// Pre-compute ray inverse direction once
 		const Vec3 invDir = 1.0f / ray.Direction;
 
+#ifdef __CUDA_ARCH__
 		const bool dirIsNeg[3] = {
 			signbit(invDir.x),
 			signbit(invDir.y),
 			signbit(invDir.z),
 		};
+#else
+		const bool dirIsNeg[3] = {
+			invDir.x < 0.0f,
+			invDir.y < 0.0f,
+			invDir.z < 0.0f,
+		};
+#endif
 
 		stackData[stackPtr++] = currentNode;
 
@@ -360,7 +368,6 @@ namespace BVH
 			}
 
 #ifdef __CUDA_ARCH__
-
 			// Check left child
 			const AABB& leftBounds = params->BVH->m_Bounds[node.Left];
 			float		tx1 = (leftBounds.Min.x - ray.Origin.x) * invDir.x, tx2 = (leftBounds.Max.x - ray.Origin.x) * invDir.x;
@@ -379,42 +386,35 @@ namespace BVH
 			const float tExitR	  = fminf(fminf(dirIsNeg[0] ? tx1 : tx2, dirIsNeg[1] ? ty1 : ty2), fminf(dirIsNeg[2] ? tz1 : tz2, tmax));
 			const float distRight = (tEnterR > tExitR) ? FLT_MAX : tEnterR;
 #else
-
 			auto slabTest = [&](const AABB& b) -> float
 			{
-				float tminL = tmin, tmaxL = tmax;
+				float tEnterL = tmin, tExitL = tmax;
 
 				// X slab
 				float t0 = ((dirIsNeg[0] ? b.Max.x : b.Min.x) - ray.Origin.x) * invDir.x;
 				float t1 = ((dirIsNeg[0] ? b.Min.x : b.Max.x) - ray.Origin.x) * invDir.x;
-				if (t0 > tminL)
-					tminL = t0;
-				if (t1 < tmaxL)
-					tmaxL = t1;
-				if (tmaxL < tminL)
+				tEnterL	 = std::max(t0, tEnterL);
+				tExitL	 = std::min(t1, tExitL);
+				if (tExitL < tEnterL)
 					return FLT_MAX;
 
 				// Y slab
-				t0 = ((dirIsNeg[1] ? b.Max.y : b.Min.y) - ray.Origin.y) * invDir.y;
-				t1 = ((dirIsNeg[1] ? b.Min.y : b.Max.y) - ray.Origin.y) * invDir.y;
-				if (t0 > tminL)
-					tminL = t0;
-				if (t1 < tmaxL)
-					tmaxL = t1;
-				if (tmaxL < tminL)
+				t0		= ((dirIsNeg[1] ? b.Max.y : b.Min.y) - ray.Origin.y) * invDir.y;
+				t1		= ((dirIsNeg[1] ? b.Min.y : b.Max.y) - ray.Origin.y) * invDir.y;
+				tEnterL = std::max(t0, tEnterL);
+				tExitL	= std::min(t1, tExitL);
+				if (tExitL < tEnterL)
 					return FLT_MAX;
 
 				// Z slab
-				t0 = ((dirIsNeg[2] ? b.Max.z : b.Min.z) - ray.Origin.z) * invDir.z;
-				t1 = ((dirIsNeg[2] ? b.Min.z : b.Max.z) - ray.Origin.z) * invDir.z;
-				if (t0 > tminL)
-					tminL = t0;
-				if (t1 < tmaxL)
-					tmaxL = t1;
-				if (tmaxL < tminL)
+				t0		= ((dirIsNeg[2] ? b.Max.z : b.Min.z) - ray.Origin.z) * invDir.z;
+				t1		= ((dirIsNeg[2] ? b.Min.z : b.Max.z) - ray.Origin.z) * invDir.z;
+				tEnterL = std::max(t0, tEnterL);
+				tExitL	= std::min(t1, tExitL);
+				if (tExitL < tEnterL)
 					return FLT_MAX;
 
-				return tminL;
+				return tEnterL;
 			};
 
 			// replace your two big blocks with:

@@ -120,7 +120,7 @@ namespace Mat
 		const bool	validScatter = (scatterDot > 0.0f) || (flags.z > 0.0f);
 
 		// 8. Apply attenuation and update ray
-		incomingRay = {rec.Location, finalDir};
+		incomingRay = { rec.Location, finalDir };
 
 		return validScatter;
 	}
