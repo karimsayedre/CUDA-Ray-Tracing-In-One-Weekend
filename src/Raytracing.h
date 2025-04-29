@@ -2,18 +2,15 @@
 #pragma once
 
 #include "Renderer.h"
-#include "CPU_GPU.h"
 #include "BVH.h"
+#include "Debug.h"
 #include "Random.h"
 #include "Material.h"
 
-
-
-template<typename RNG>
-__device__ __host__ inline void CreateWorld()
+__device__ __host__ CPU_ONLY_INLINE void CreateWorld()
 {
-	RNG			rng(1984); // Seed the RNG
-	const auto* params = GetParams();
+	uint32_t			seed   = PcgHash(134537);
+	const RenderParams* params = GetParams();
 
 	// Ground sphere:
 	Mat::Add(Mat::MaterialType::Lambert, Vec3(0.5f, 0.5f, 0.5f), 0.0f, 1.0f);
@@ -24,29 +21,47 @@ __device__ __host__ inline void CreateWorld()
 	{
 		for (int b = -11; b < 11; b++)
 		{
-#define RND (rng.Uniform())
+			// NOTE: explicitly having random variables to prevent different compilers from
+			// having un-sequenced side effects so CPU and GPU versions are identical
 
-			const float chooseMat = RND;
-			const Vec3	center(a + RND, 0.2f, b + RND);
+			float chooseMat = RandomFloat(seed);
+
+			// 2. draw the two offsets for the sphere center
+			const float offX = RandomFloat(seed);
+			const float offZ = RandomFloat(seed);
+			Vec3		center(a + offX, 0.2f, b + offZ);
+
 			if (chooseMat < 0.8f)
 			{
-				Mat::Add(Mat::MaterialType::Lambert, Vec3(RND * RND, RND * RND, RND * RND), 0.0f, 1.0f);
-				Hitables::Add(center, 0.2f);
+				// Lambert: draw three components, square each
+				const float r = RandomFloat(seed);
+				const float g = RandomFloat(seed);
+				const float b = RandomFloat(seed);
+				Vec3		albedo(r * r, g * g, b * b);
+				Mat::Add(Mat::MaterialType::Lambert, albedo, 0.0f, 1.0f);
 			}
 			else if (chooseMat < 0.95f)
 			{
-				Mat::Add(Mat::MaterialType::Metal, Vec3(0.5f * (1 + RND), 0.5f * (1 + RND), 0.5f * (1 + RND)), 0.5f * RND, 1.0f);
-				Hitables::Add(center, 0.2f);
+				// Metal: draw three components for color + one for fuzz
+				const float mr = RandomFloat(seed);
+				const float mg = RandomFloat(seed);
+				const float mb = RandomFloat(seed);
+				Vec3		metalCol(
+					   0.5f * (1.0f + mr),
+					   0.5f * (1.0f + mg),
+					   0.5f * (1.0f + mb));
+				const float fuzz = 0.5f * RandomFloat(seed);
+				Mat::Add(Mat::MaterialType::Metal, metalCol, fuzz, 1.0f);
 			}
 			else
 			{
-				Mat::Add(Mat::MaterialType::Dielectric, Vec3(1.0), 0.0f, 1.5f);
-				Hitables::Add(center, 0.2f);
+				// Dielectric needs no extra RNG draws
+				Mat::Add(Mat::MaterialType::Dielectric, Vec3(1.0f), 0.0f, 1.5f);
 			}
-#undef RND
+
+			Hitables::Add(center, 0.2f);
 		}
 	}
-
 	// Add the three big spheres:
 	Mat::Add(Mat::MaterialType::Dielectric, Vec3(1.0), 0.0f, 1.5f);
 	Hitables::Add(Vec3(0, 1, 0), 1.0f);
@@ -63,20 +78,28 @@ __device__ __host__ inline void CreateWorld()
 
 	params->BVH->m_Root = BVH::Build(indices, 0, params->List->Count);
 
-	// params->BVH->m_Root = BVH::ReorderBVH(); // Disabled for now
+#ifdef RTIOW_BVH_VEB
+	params->BVH->m_Root = BVH::ReorderBVH(); // Disabled for now
+#endif
 
 	free(indices);
 
-	printf("BVHNode created with %u nodes.\n", params->BVH->m_Count);
-	printf("BVHNode Root: %u\n", params->BVH->m_Root);
-	// DebugBVHNode(d_World, d_World->root);
+#ifdef __CUDA_ARCH__
+	printf("CUDA BVH constructed with %u nodes.\n", params->BVH->m_Count);
+	printf("CUDA BVH Root: %u\n", params->BVH->m_Root);
+#else
+	printf("CPU BVH constructed with %u nodes.\n", params->BVH->m_Count);
+	printf("CPU BVH Root: %u\n", params->BVH->m_Root);
+#endif
+
+#ifdef RTIOW_DEBUG_BVH
+	DebugBVHNode(params->BVH, params->BVH->m_Root);
+#endif
 }
 
-
-
-__device__ __host__ inline Vec3 RayColor(const Ray& ray, uint32_t& randSeed)
+__device__ __host__ CPU_ONLY_INLINE Vec3 RayColor(const Ray& ray, uint32_t& randSeed)
 {
-	const auto* params = GetParams();
+	const RenderParams* params = GetParams();
 
 	Ray	 origRay = ray;
 	Vec3 curAttenuation(1.0f);
@@ -111,4 +134,3 @@ __device__ __host__ inline Vec3 RayColor(const Ray& ray, uint32_t& randSeed)
 
 	return curAttenuation; // Exceeded max depth
 }
-

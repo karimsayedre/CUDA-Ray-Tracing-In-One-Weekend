@@ -11,8 +11,6 @@
 #include "Renderer.h"
 #include "ThreadPool.h"
 #include "SFML/Graphics/Image.hpp"
-#include <omp.h>
-
 // Explicit instantiations
 template class Renderer<ExecutionMode::GPU>;
 template class Renderer<ExecutionMode::CPU>;
@@ -43,13 +41,13 @@ __global__ void CreateWorldKernel()
 {
 	if (threadIdx.x == 0 && blockIdx.x == 0)
 	{
-		CreateWorld<GpuRNG>();
+		CreateWorld();
 	}
 }
 
 __global__ void RenderKernel()
 {
-	const auto* params = GetParams();
+	const RenderParams* params = GetParams();
 
 	const float x = (float)(threadIdx.x + blockIdx.x * blockDim.x);
 	const float y = (float)(threadIdx.y + blockIdx.y * blockDim.y);
@@ -64,9 +62,9 @@ __global__ void RenderKernel()
 
 	for (uint32_t s = 0; s < params->m_SamplesPerPixel; s++)
 	{
-		const float2 uv = float2 {(x + RandomFloat(seed)) * params->ResolutionInfo.x, 1.0f - (y + RandomFloat(seed)) * params->ResolutionInfo.y};
+		const float2 uv = float2 { (x + RandomFloat(seed)) * params->ResolutionInfo.x, 1.0f - (y + RandomFloat(seed)) * params->ResolutionInfo.y };
 
-		const auto ray = reinterpret_cast<const Camera&>(params->Camera).GetRay(uv);
+		const Ray ray = reinterpret_cast<const Camera&>(params->Camera).GetRay(uv);
 
 		pixelColor += RayColor(ray, seed);
 	}
@@ -103,7 +101,6 @@ __host__ Renderer<Mode>::Renderer(const sf::Vector2u dims, const uint32_t sample
 	dp_Materials = Mat::Init<Mode>(numHitables);
 	dp_BVH		 = BVH::Init<Mode>(numHitables * 2 - 1);
 
-	// if constexpr (Mode == ExecutionMode::GPU)
 	CopyDeviceData(0);
 
 	if constexpr (Mode == ExecutionMode::GPU)
@@ -114,7 +111,7 @@ __host__ Renderer<Mode>::Renderer(const sf::Vector2u dims, const uint32_t sample
 	}
 	else
 	{
-		CreateWorld<CpuRNG>();
+		CreateWorld();
 	}
 
 	ResizeImage(dims, 0);
@@ -125,14 +122,10 @@ void Renderer<Mode>::ResizeImage(const sf::Vector2u dims, cudaSurfaceObject_t su
 {
 	if (m_Dims == dims)
 		return;
-
-	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
-	if (dp_RandSeeds)
-		MemPolicy<Mode>::Free(dp_RandSeeds);
-
 	m_Dims = dims;
 
-	dp_RandSeeds = MemPolicy<Mode>::template Alloc<uint32_t>(m_Dims.x * m_Dims.y);
+	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
+	MemPolicy<Mode>::template Resize(dp_RandSeeds, m_Dims.x * m_Dims.y);
 
 	// Update camera with new aspect ratio
 	m_Camera.ResizeViewport(float(m_Dims.x) / float(m_Dims.y));
@@ -164,9 +157,10 @@ void Renderer<Mode>::ResizeImage(const sf::Vector2u dims, cudaSurfaceObject_t su
 
 template<>
 template<>
-std::chrono::duration<float, std::milli> Renderer<ExecutionMode::GPU>::Render(const sf::Vector2u& size, cudaSurfaceObject_t& surface)
+std::chrono::duration<float, std::milli> Renderer<ExecutionMode::GPU>::Render(const sf::Vector2u& size, cudaSurfaceObject_t& surface, bool moveCamera)
 {
-	// m_Camera.MoveAndLookAtSamePoint({0.1f, 0.0f, 0.f}, 10.0f);
+	if (moveCamera)
+		m_Camera.MoveAndLookAtSamePoint({ 0.1f, 0.0f, 0.f }, 10.0f);
 
 	CopyDeviceData(surface);
 
@@ -191,12 +185,12 @@ std::chrono::duration<float, std::milli> Renderer<ExecutionMode::GPU>::Render(co
 template<ExecutionMode Mode>
 void Renderer<Mode>::CopyDeviceData(const cudaSurfaceObject_t imageSurface) const
 {
-	auto* h_Params				= GetParams();
+	RenderParams* h_Params		= GetParams();
 	h_Params->Image				= imageSurface;
 	h_Params->BVH				= dp_BVH;
 	h_Params->List				= dp_List;
 	h_Params->Materials			= dp_Materials;
-	h_Params->ResolutionInfo	= float4 {1.0f / (float)m_Dims.x, 1.0f / (float)m_Dims.y, (float)m_Dims.x, (float)m_Dims.y};
+	h_Params->ResolutionInfo	= float4 { 1.0f / (float)m_Dims.x, 1.0f / (float)m_Dims.y, (float)m_Dims.x, (float)m_Dims.y };
 	h_Params->Camera			= reinterpret_cast<CameraPOD&>(m_Camera);
 	h_Params->RandSeeds			= dp_RandSeeds;
 	h_Params->m_ColorMul		= m_ColorMul;

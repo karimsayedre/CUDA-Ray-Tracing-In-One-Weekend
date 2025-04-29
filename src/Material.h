@@ -11,6 +11,7 @@ namespace Mat
 		Dielectric
 	};
 
+	// Note: Could use this as a class with member functions but NVCC wouldn't show them in PTXAS info
 	struct Materials
 	{
 		Vec3*  Albedo;
@@ -20,40 +21,34 @@ namespace Mat
 
 		uint32_t Count = 0;
 	};
-	
-	template<ExecutionMode M>
+
+	template<ExecutionMode Mode>
 	__host__ inline Materials* Init(const uint32_t capacity)
 	{
 		Materials h_materials;
-		h_materials.Albedo		  = MemPolicy<M>::template Alloc<Vec3>(capacity);
-		h_materials.Flags		  = MemPolicy<M>::template Alloc<Vec3>(capacity);
-		h_materials.Fuzz			  = MemPolicy<M>::template Alloc<float>(capacity);
-		h_materials.Ior			  = MemPolicy<M>::template Alloc<float>(capacity);
+		h_materials.Albedo = MemPolicy<Mode>::template Alloc<Vec3>(capacity);
+		h_materials.Flags  = MemPolicy<Mode>::template Alloc<Vec3>(capacity);
+		h_materials.Fuzz   = MemPolicy<Mode>::template Alloc<float>(capacity);
+		h_materials.Ior	   = MemPolicy<Mode>::template Alloc<float>(capacity);
 
-		Materials* d_Materials = MemPolicy<M>::template Alloc<Materials>(1);
+		Materials* d_Materials = MemPolicy<Mode>::template Alloc<Materials>(1);
 
-		if constexpr (M == ExecutionMode::GPU)
-		{
-			// device allocation + copy
+		if constexpr (Mode == ExecutionMode::GPU)
 			CHECK_CUDA_ERRORS(cudaMemcpy(d_Materials, &h_materials, sizeof(Materials), cudaMemcpyHostToDevice));
-		}
 		else
-		{
-			// plain host allocation + copy
 			*d_Materials = h_materials;
-		}
 
 		return d_Materials;
 	}
 
 	// ReSharper disable once CppNonInlineFunctionDefinitionInHeaderFile
-	__device__ __host__ inline void Add(const MaterialType type, const Vec3& albedo, const float fuzz = 0.0f, const float ior = 1.0f)
+	__device__ __host__ CPU_ONLY_INLINE void Add(const MaterialType type, const Vec3& albedo, const float fuzz = 0.0f, const float ior = 1.0f)
 	{
-		const auto* params = GetParams();
+		const RenderParams* params = GetParams();
 
 		params->Materials->Albedo[params->Materials->Count] = albedo;
-		params->Materials->Fuzz[params->Materials->Count]	  = fuzz;
-		params->Materials->Ior[params->Materials->Count]	  = ior;
+		params->Materials->Fuzz[params->Materials->Count]	= fuzz;
+		params->Materials->Ior[params->Materials->Count]	= ior;
 
 		// Set material flags based on type
 		switch (type)
@@ -78,9 +73,9 @@ namespace Mat
 	}
 
 	// ReSharper disable once CppNonInlineFunctionDefinitionInHeaderFile
-	__device__ __host__ inline bool Scatter(Ray& incomingRay, const HitRecord& rec, Vec3& currAttenuation, uint32_t& randSeed)
+	__device__ __host__ CPU_ONLY_INLINE bool Scatter(Ray& incomingRay, const HitRecord& rec, Vec3& currAttenuation, uint32_t& randSeed)
 	{
-		const auto* params = GetParams();
+		const RenderParams* params = GetParams();
 
 		// 1. Get one random vector for all calculations
 		const Vec3 randomVec = RandomVec3(randSeed);
@@ -109,7 +104,7 @@ namespace Mat
 			const bool	canRefract	 = Refract(incomingRay.Direction, outwardNormal, niOverNt, refracted);
 			const float reflectProb	 = canRefract ? Reflectance(cosine, ior) : 1.0f;
 			const Vec3	reflectedDir = Reflect(incomingRay.Direction, outwardNormal);
-			dielectricDir			 = (RandomFloat(randSeed) < reflectProb) ? reflectedDir : refracted;
+			dielectricDir			 = RandomFloat(randSeed) < reflectProb ? reflectedDir : refracted;
 		}
 
 		// 5. Material weights - compute once

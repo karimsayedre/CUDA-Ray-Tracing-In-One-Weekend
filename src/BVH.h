@@ -4,7 +4,7 @@
 
 namespace BVH
 {
-
+	// Note: Could use this as a class with member functions but NVCC wouldn't show them in PTXAS info
 	struct alignas(32) BVHSoA
 	{
 		struct BVHNode
@@ -19,48 +19,44 @@ namespace BVH
 		uint16_t m_Root	 = 0;
 	};
 
-	template<ExecutionMode M>
+	template<ExecutionMode Mode>
 	__host__ inline BVHSoA* Init(const uint32_t capacity)
 	{
 		BVHSoA h_BVH;
-		h_BVH.m_Bounds = MemPolicy<M>::template Alloc<AABB>(capacity);
-		h_BVH.m_Nodes  = MemPolicy<M>::template Alloc<BVHSoA::BVHNode>(capacity);
+		h_BVH.m_Bounds = MemPolicy<Mode>::template Alloc<AABB>(capacity);
+		h_BVH.m_Nodes  = MemPolicy<Mode>::template Alloc<BVHSoA::BVHNode>(capacity);
 
-		BVHSoA* d_BVH = MemPolicy<M>::template Alloc<BVHSoA>(1);
+		BVHSoA* d_BVH = MemPolicy<Mode>::template Alloc<BVHSoA>(1);
 
-		if constexpr (M == ExecutionMode::GPU)
-		{
-			// device allocation + copy
+		if constexpr (Mode == ExecutionMode::GPU)
 			CHECK_CUDA_ERRORS(cudaMemcpy(d_BVH, &h_BVH, sizeof(BVHSoA), cudaMemcpyHostToDevice));
-		}
 		else
-		{
-			// plain host allocation + copy
 			*d_BVH = h_BVH;
-		}
 
 		return d_BVH;
 	}
 
 	// ReSharper disable once CppNonInlineFunctionDefinitionInHeaderFile
-	__device__ __host__ inline uint16_t AddNode(const uint16_t leftIdx, const uint16_t rightIdx, const AABB& box)
+	__device__ __host__ CPU_ONLY_INLINE uint16_t AddNode(const uint16_t leftIdx, const uint16_t rightIdx, const AABB& box)
 	{
-		auto* params = GetParams();
+		const RenderParams* params = GetParams();
 
-		params->BVH->m_Nodes[params->BVH->m_Count]	= BVHSoA::BVHNode {leftIdx, rightIdx};
+		params->BVH->m_Nodes[params->BVH->m_Count]	= BVHSoA::BVHNode { leftIdx, rightIdx };
 		params->BVH->m_Bounds[params->BVH->m_Count] = box;
 		return params->BVH->m_Count++;
 	}
 
-#ifdef VEB // can be more significant if we have a lot of nodes that they don't fit L1 cache
-	__device__ void ReorderVEB(uint16_t nodeIdx, uint16_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint16_t& newIndex, int currentDepth, int treeHeight);
+#ifdef RTIOW_BVH_VEB // can be more significant if we have a lot of nodes that they don't fit L1 cache
+	__device__ __host__ void ReorderVEB(uint16_t nodeIdx, uint16_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint16_t& newIndex, int currentDepth, int treeHeight);
 
 	// Helper function for recursion with depth limits
-	__device__ void ReorderVEBRecursive(uint16_t nodeIdx, uint16_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint16_t& newIndex, int currentDepth, int depthLimit, int treeHeight)
+	__device__ __host__ CPU_ONLY_INLINE void ReorderVEBRecursive(uint16_t nodeIdx, uint16_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint16_t& newIndex, int currentDepth, int depthLimit, int treeHeight)
 	{
 		// Return if node is invalid
 		if (nodeIdx == UINT16_MAX)
 			return;
+
+		const RenderParams* params = GetParams();
 
 		// Get the current node
 		const BVHSoA::BVHNode& node = params->BVH->m_Nodes[nodeIdx];
@@ -99,11 +95,12 @@ namespace BVH
 	}
 
 	// Recursive function to reorder the nodes in a van Emde Boas layout
-	__device__ void ReorderVEB(uint16_t nodeIdx, uint16_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint16_t& newIndex, int currentDepth, int treeHeight)
+	__device__ __host__ CPU_ONLY_INLINE void ReorderVEB(uint16_t nodeIdx, uint16_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint16_t& newIndex, int currentDepth, int treeHeight)
 	{
 		// Return if node is invalid
 		if (nodeIdx == UINT16_MAX)
 			return;
+		const RenderParams* params = GetParams();
 
 		// Get the current node
 		const BVHSoA::BVHNode& node = params->BVH->m_Nodes[nodeIdx];
@@ -140,8 +137,10 @@ namespace BVH
 		ReorderVEBRecursive(node.Right, nodeMap, tempNodes, tempBounds, newIndex, currentDepth + 1, currentDepth + upperHeight, treeHeight);
 	}
 
-	__device__ uint16_t ReorderBVH()
+	__device__ __host__ CPU_ONLY_INLINE uint16_t ReorderBVH()
 	{
+		const RenderParams* params = GetParams();
+
 		// Temporary arrays to hold the reordered BVH
 		BVHSoA::BVHNode* tempNodes	= static_cast<BVHSoA::BVHNode*>(malloc(params->BVH->m_Count * sizeof(BVHSoA::BVHNode)));
 		AABB*			 tempBounds = static_cast<AABB*>(malloc(params->BVH->m_Count * sizeof(AABB)));
@@ -186,10 +185,10 @@ namespace BVH
 #endif
 
 	// ReSharper disable once CppNonInlineFunctionDefinitionInHeaderFile
-	__device__ __host__ inline uint16_t Build(uint16_t* indices, uint16_t start, uint16_t end)
+	__device__ __host__ CPU_ONLY_INLINE uint16_t Build(uint16_t* indices, uint16_t start, uint16_t end)
 	{
-		const auto* params	   = GetParams();
-		uint16_t	objectSpan = end - start;
+		const RenderParams* params	   = GetParams();
+		const uint16_t		objectSpan = end - start;
 
 		// Compute bounding box for this node
 		AABB box;
@@ -322,9 +321,9 @@ namespace BVH
 		return AddNode(leftIdx, rightIdx, combined);
 	}
 
-	__device__ __host__ inline bool Traverse(const Ray& ray, const float tmin, float tmax, HitRecord& bestHit)
+	__device__ __host__ CPU_ONLY_INLINE bool Traverse(const Ray& ray, const float tmin, float tmax, HitRecord& bestHit)
 	{
-		const auto* params = GetParams();
+		const RenderParams* params = GetParams();
 
 		// Use registers for stack instead of memory
 		uint16_t currentNode = params->BVH->m_Root;
@@ -333,7 +332,7 @@ namespace BVH
 		bool	 hitAnything = false;
 
 		// Pre-compute ray inverse direction once
-		const __align__(16) Vec3 invDir = 1.0f / ray.Direction;
+		const Vec3 invDir = 1.0f / ray.Direction;
 
 		const bool dirIsNeg[3] = {
 			signbit(invDir.x),
@@ -360,6 +359,8 @@ namespace BVH
 				continue;
 			}
 
+#ifdef __CUDA_ARCH__
+
 			// Check left child
 			const AABB& leftBounds = params->BVH->m_Bounds[node.Left];
 			float		tx1 = (leftBounds.Min.x - ray.Origin.x) * invDir.x, tx2 = (leftBounds.Max.x - ray.Origin.x) * invDir.x;
@@ -377,6 +378,49 @@ namespace BVH
 			const float tEnterR	  = fmaxf(fmaxf(dirIsNeg[0] ? tx2 : tx1, dirIsNeg[1] ? ty2 : ty1), fmaxf(dirIsNeg[2] ? tz2 : tz1, tmin));
 			const float tExitR	  = fminf(fminf(dirIsNeg[0] ? tx1 : tx2, dirIsNeg[1] ? ty1 : ty2), fminf(dirIsNeg[2] ? tz1 : tz2, tmax));
 			const float distRight = (tEnterR > tExitR) ? FLT_MAX : tEnterR;
+#else
+
+			auto slabTest = [&](const AABB& b) -> float
+			{
+				float tminL = tmin, tmaxL = tmax;
+
+				// X slab
+				float t0 = ((dirIsNeg[0] ? b.Max.x : b.Min.x) - ray.Origin.x) * invDir.x;
+				float t1 = ((dirIsNeg[0] ? b.Min.x : b.Max.x) - ray.Origin.x) * invDir.x;
+				if (t0 > tminL)
+					tminL = t0;
+				if (t1 < tmaxL)
+					tmaxL = t1;
+				if (tmaxL < tminL)
+					return FLT_MAX;
+
+				// Y slab
+				t0 = ((dirIsNeg[1] ? b.Max.y : b.Min.y) - ray.Origin.y) * invDir.y;
+				t1 = ((dirIsNeg[1] ? b.Min.y : b.Max.y) - ray.Origin.y) * invDir.y;
+				if (t0 > tminL)
+					tminL = t0;
+				if (t1 < tmaxL)
+					tmaxL = t1;
+				if (tmaxL < tminL)
+					return FLT_MAX;
+
+				// Z slab
+				t0 = ((dirIsNeg[2] ? b.Max.z : b.Min.z) - ray.Origin.z) * invDir.z;
+				t1 = ((dirIsNeg[2] ? b.Min.z : b.Max.z) - ray.Origin.z) * invDir.z;
+				if (t0 > tminL)
+					tminL = t0;
+				if (t1 < tmaxL)
+					tmaxL = t1;
+				if (tmaxL < tminL)
+					return FLT_MAX;
+
+				return tminL;
+			};
+
+			// replace your two big blocks with:
+			float distLeft	= slabTest(params->BVH->m_Bounds[node.Left]);
+			float distRight = slabTest(params->BVH->m_Bounds[node.Right]);
+#endif
 
 			// Neither child was hit
 			if (distLeft == FLT_MAX && distRight == FLT_MAX)

@@ -53,10 +53,20 @@ target_link_libraries(${PROJECT_NAME}
   spdlog glm sfml-system sfml-window sfml-graphics
 )
 
-# Add option to enable sanitizer for all configurations
-option(USE_COMPUTE_SANITIZER "Use CUDA Compute Sanitizer for all configurations" OFF)
+option(RTIOW_BVH_VEB "Enable BVH Van Emde Boas layout." OFF)
+option(RTIOW_DEBUG_BVH "Enable BVH debug visualization/logging." OFF)
 
-if(USE_COMPUTE_SANITIZER)
+if(RTIOW_BVH_VEB)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE RTIOW_BVH_VEB)
+endif()
+
+if(RTIOW_DEBUG_BVH)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE RTIOW_DEBUG_BVH)
+endif()
+
+option(RTIOW_USE_COMPUTE_SANITIZER "Use CUDA Compute Sanitizer for all configurations" OFF)
+
+if(RTIOW_USE_COMPUTE_SANITIZER)
   # Manually derive CUDA_PATH from CUDAToolkit_BIN_DIR
   get_filename_component(CUDA_PATH "${CUDAToolkit_BIN_DIR}" DIRECTORY)
   message(STATUS "CUDA_PATH=${CUDA_PATH}")
@@ -77,7 +87,7 @@ if(USE_COMPUTE_SANITIZER)
   endif()
 
   # Apply sanitizer if enabled
-  if(MSVC AND USE_COMPUTE_SANITIZER)
+  if(MSVC AND RTIOW_USE_COMPUTE_SANITIZER)
     message(STATUS "Enabling CUDA Compute Sanitizer for all configurations")
     set_target_properties(${PROJECT_NAME} PROPERTIES
       VS_DEBUGGER_COMMAND "${COMPUTE_SANITIZER_PATH}"
@@ -171,5 +181,10 @@ target_compile_options(${PROJECT_NAME} PRIVATE
   -gencode=arch=compute_86,code=compute_86
   >
 
-  $<$<COMPILE_LANGUAGE:CXX>:/MP>
+  $<$<COMPILE_LANGUAGE:CXX>:
+  /MP
+  /fp:fast
+  /arch:AVX2
+  /vlen=256
+  >
 )

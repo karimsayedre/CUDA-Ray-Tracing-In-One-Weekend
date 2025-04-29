@@ -5,7 +5,6 @@
 
 #include "Renderer.h"
 
-
 struct CudaGLSurface
 {
 	cudaGraphicsResource* CudaRes;

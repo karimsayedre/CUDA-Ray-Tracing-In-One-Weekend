@@ -2,7 +2,6 @@
 
 #include <cuda.h>
 #include <cuda_runtime.h>
-#include <curand_kernel.h>
 #include <device_launch_parameters.h>
 #include <glm/glm.hpp>
 #include <vector>
@@ -16,14 +15,17 @@
 #include <cuda_surface_types.h>
 #include <math.h>
 
-
 #ifdef __CUDACC__
-#if (GLM_COMPILER & GLM_COMPILER_CUDA)
-#pragma message("CUDA compiler detected")
-#else 
-#error("CUDA compiler NOT detected")
-#endif
+#	if (GLM_COMPILER & GLM_COMPILER_CUDA)
+#		pragma message("CUDA compiler detected")
+#	else
+#		error("CUDA compiler NOT detected")
+#	endif
 #endif
 
-
+#ifdef __CUDA_ARCH__
+#	define CPU_ONLY_INLINE // No need for inline, inline prevents NVCC from showing these functions in PTXAS info too.
+#else
+#	define CPU_ONLY_INLINE inline
+#endif
 using Vec3 = glm::vec<3, float, glm::aligned_mediump>;

@@ -1,15 +1,12 @@
 #pragma once
 #include "pch.h"
 
-#include <random>
-
-
 #define CHECK_CUDA
 #ifdef CHECK_CUDA
 __host__ void CheckCuda(cudaError_t result, char const* const func, const char* const file, int const line);
-#define CHECK_CUDA_ERRORS(val) CheckCuda((val), #val, __FILE__, __LINE__)
+#	define CHECK_CUDA_ERRORS(val) CheckCuda((val), #val, __FILE__, __LINE__)
 #else
-#define CHECK_CUDA_ERRORS(val) (val)
+#	define CHECK_CUDA_ERRORS(val) (val)
 #endif
 
 #define CHECK_BOOL(val)     \
@@ -22,7 +19,6 @@ __host__ void CheckCuda(cudaError_t result, char const* const func, const char* 
 		}                   \
 	} while (false)
 
-
 namespace sf
 {
 	class Image;
@@ -34,53 +30,49 @@ enum class ExecutionMode
 	GPU
 };
 
-struct CpuRNG
-{
-	std::mt19937						  Engine;
-	std::uniform_real_distribution<float> Dist {0.0f, 1.0f};
-	CpuRNG(uint32_t seed)
-		: Engine(seed)
-	{
-	}
-	__host__ float Uniform()
-	{
-		return Dist(Engine);
-	}
-};
-
-struct GpuRNG
-{
-	curandState state;
-	__device__	GpuRNG(const uint64_t seed)
-	{
-		curand_init(seed, 0, 0, &state);
-	}
-	__device__ float Uniform()
-	{
-		return curand_uniform(&state);
-	}
-};
-
 template<ExecutionMode M>
 struct MemPolicy
 {
 	template<typename T>
-	static T* Alloc(size_t n)
+	static T* Alloc(const size_t count) // count multiplied by size of primitive
 	{
 		if constexpr (M == ExecutionMode::CPU)
 		{
-			return static_cast<T*>(std::malloc(n * sizeof(T)));
+			return static_cast<T*>(std::malloc(count * sizeof(T)));
 		}
 		else if constexpr (M == ExecutionMode::GPU)
 		{
 			T* p = nullptr;
-			CHECK_CUDA_ERRORS(cudaMalloc(&p, n * sizeof(T)));
+			CHECK_CUDA_ERRORS(cudaMalloc(&p, count * sizeof(T)));
 			return p;
 		}
 		else
 		{
 			static_assert(M == ExecutionMode::CPU || M == ExecutionMode::GPU, "Unsupported ExecutionMode");
 			return nullptr;
+		}
+	}
+
+	template<typename T>
+	static void Resize(T*& oldPtr, const size_t newCount) // newCount multiplied by size of primitive
+	{
+		if constexpr (M == ExecutionMode::CPU)
+		{
+			if (oldPtr)
+				std::free(oldPtr);
+
+			oldPtr = static_cast<T*>(std::malloc(newCount * sizeof(T)));
+		}
+		else if constexpr (M == ExecutionMode::GPU)
+		{
+			if (oldPtr)
+				CHECK_CUDA_ERRORS(cudaFree(oldPtr));
+
+			CHECK_CUDA_ERRORS(cudaMalloc(&oldPtr, newCount * sizeof(T)));
+		}
+		else
+		{
+			static_assert(false, "Unsupported ExecutionMode");
 		}
 	}
 
@@ -96,7 +88,7 @@ struct MemPolicy
 		}
 		else
 		{
-			static_assert(M == ExecutionMode::CPU || M == ExecutionMode::GPU, "Unsupported ExecutionMode");
+			static_assert(false, "Unsupported ExecutionMode");
 		}
 	}
 };
@@ -108,5 +100,4 @@ template<typename T>
 concept IsCpuImage = std::same_as<std::remove_cvref_t<T>, sf::Image>;
 
 template<ExecutionMode Mode, typename Image>
-concept ValidImageForMode =
-	(Mode == ExecutionMode::GPU && IsGpuImage<Image>) || (Mode == ExecutionMode::CPU && IsCpuImage<Image>);
+concept ValidImageForMode = (Mode == ExecutionMode::GPU && IsGpuImage<Image>) || (Mode == ExecutionMode::CPU && IsCpuImage<Image>);

@@ -20,6 +20,8 @@ AlwaysBreakAfterReturnType: None
 AlwaysBreakBeforeMultilineStrings: false
 BreakConstructorInitializers: BeforeColon
 LambdaBodyIndentation: OuterScope
+IndentPPDirectives: AfterHash
+Cpp11BracedListStyle: false
 
 BraceWrapping:
   AfterClass: true
@@ -58,6 +60,8 @@ SpaceBeforeAssignmentOperators: true
 SpaceBeforeCpp11BracedList: true
 SpaceBeforeInheritanceColon: true
 SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInContainerLiterals: true
 SpaceBeforeRangeBasedForLoopColon: true
 TabWidth: 4
 UseTab: Always

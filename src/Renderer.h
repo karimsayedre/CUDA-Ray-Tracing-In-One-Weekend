@@ -42,7 +42,7 @@ struct RenderParams
 	float				m_ColorMul {};
 };
 
-extern RenderParams				 h_Params; // unified host copy
+extern RenderParams				 h_Params; // unified host copy -> CPURender.cpp
 __constant__ inline RenderParams d_Params; // GPU constant memory copy
 
 __host__ __device__ inline RenderParams* GetParams()
@@ -69,7 +69,7 @@ class Renderer
 	// declaration only, no definition here:
 	template<typename Image>
 		requires ValidImageForMode<Mode, Image>
-	__host__ std::chrono::duration<float, std::milli> Render(const sf::Vector2u& size, Image& surface);
+	__host__ std::chrono::duration<float, std::milli> Render(const sf::Vector2u& size, Image& surface, bool moveCamera);
 
 	__host__ ~Renderer();
 
@@ -89,9 +89,3 @@ class Renderer
 
 	cudaEvent_t m_StartEvent, m_EndEvent;
 };
-
-//// Instantiate for CPU with sf::Image
-// template std::chrono::duration<float, std::milli> Renderer<ExecutionMode::CPU>::Render<sf::Image>(const sf::Vector2u& size, sf::Image& surface);
-//
-//// Instantiate for GPU with cudaSurfaceObject_t
-// template std::chrono::duration<float, std::milli> Renderer<ExecutionMode::GPU>::Render<cudaSurfaceObject_t>(const sf::Vector2u& size, cudaSurfaceObject_t& surface);
