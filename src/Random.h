@@ -23,7 +23,12 @@ __device__ __host__ __forceinline__ float RandomFloat(uint32_t& seed)
 	return static_cast<float>(RandomInt(seed) & 0x00FFFFFF) / static_cast<float>(0x01000000);
 }
 
+__device__ __host__ __forceinline__ Vec2 RandomVec2(uint32_t& seed)
+{
+	return { RandomFloat(seed), RandomFloat(seed) };
+}
+
 __device__ __host__ __forceinline__ Vec3 RandomVec3(uint32_t& seed)
 {
-	return {RandomFloat(seed), RandomFloat(seed), RandomFloat(seed)};
+	return { RandomFloat(seed), RandomFloat(seed), RandomFloat(seed) };
 }

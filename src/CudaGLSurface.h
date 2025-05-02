@@ -8,16 +8,21 @@
 struct CudaGLSurface
 {
 	cudaGraphicsResource* CudaRes;
-	GLuint				  GlTex; // Remember the current OpenGL texture handle
+	GLuint				  GlTex;
+	cudaSurfaceObject_t	  SurfObj;
+	cudaArray_t			  Array;
+	bool				  IsMapped;
 
 	CudaGLSurface(GLuint _glTex)
-		: CudaRes(nullptr), GlTex(_glTex)
+		: CudaRes(nullptr), GlTex(_glTex), SurfObj(0), Array(nullptr), IsMapped(false)
 	{
 		RegisterTexture();
 	}
 
 	~CudaGLSurface()
 	{
+		if (SurfObj)
+			CHECK_CUDA_ERRORS(cudaDestroySurfaceObject(SurfObj));
 		UnregisterSurface();
 	}
 
@@ -28,6 +33,12 @@ struct CudaGLSurface
 
 	void UnregisterSurface()
 	{
+		if (IsMapped)
+		{
+			CHECK_CUDA_ERRORS(cudaGraphicsUnmapResources(1, &CudaRes, nullptr));
+			IsMapped = false;
+		}
+
 		if (CudaRes)
 		{
 			CHECK_CUDA_ERRORS(cudaGraphicsUnregisterResource(CudaRes));
@@ -35,34 +46,44 @@ struct CudaGLSurface
 		}
 	}
 
-	// Call this after any texture resize/recreation with a new OpenGL handle
 	void Resize(const GLuint newTex)
 	{
+		// Clean up old resources
+		if (SurfObj)
+		{
+			CHECK_CUDA_ERRORS(cudaDestroySurfaceObject(SurfObj));
+			SurfObj = 0;
+		}
+
 		UnregisterSurface();
 		GlTex = newTex;
 		RegisterTexture();
 	}
 
-	// Map the resource, create a surface object for CUDA access
 	cudaSurfaceObject_t BeginFrame()
 	{
 		CHECK_CUDA_ERRORS(cudaGraphicsMapResources(1, &CudaRes, nullptr));
-		cudaArray_t array;
-		CHECK_CUDA_ERRORS(cudaGraphicsSubResourceGetMappedArray(&array, CudaRes, 0, 0));
+		IsMapped = true;
 
-		cudaResourceDesc desc;
-		desc.resType		 = cudaResourceTypeArray;
-		desc.res.array.array = array;
+		CHECK_CUDA_ERRORS(cudaGraphicsSubResourceGetMappedArray(&Array, CudaRes, 0, 0));
 
-		cudaSurfaceObject_t surf = 0;
-		CHECK_CUDA_ERRORS(cudaCreateSurfaceObject(&surf, &desc));
-		return surf;
+		// Only create surface object if it doesn't exist yet
+		if (SurfObj == 0)
+		{
+			cudaResourceDesc desc;
+			desc.resType		 = cudaResourceTypeArray;
+			desc.res.array.array = Array;
+
+			CHECK_CUDA_ERRORS(cudaCreateSurfaceObject(&SurfObj, &desc));
+		}
+
+		return SurfObj;
 	}
 
-	// Destroy the surface and unmap the resource
-	void EndFrame(const cudaSurfaceObject_t surf)
+	void EndFrame()
 	{
-		CHECK_CUDA_ERRORS(cudaDestroySurfaceObject(surf));
+		// Don't destroy the surface object, just unmap the resource
 		CHECK_CUDA_ERRORS(cudaGraphicsUnmapResources(1, &CudaRes, nullptr));
+		IsMapped = false;
 	}
 };

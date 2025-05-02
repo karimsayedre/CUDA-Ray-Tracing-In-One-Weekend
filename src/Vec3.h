@@ -1,25 +1,21 @@
 #pragma once
+#include "pch.h"
 
-__device__ __host__ inline Vec3 Reflect(const Vec3& v, const Vec3& n)
+__device__ __host__ CPU_ONLY_INLINE float Schlick(float cosTheta, float refIdx)
 {
-	return v - 2.0f * glm::dot(v, n) * n;
+	float r0 = (1.0f - refIdx) / (1.0f + refIdx);
+
+	r0		   = r0 * r0;
+	float inv  = 1.0f - cosTheta;
+	float inv5 = inv * inv * inv * inv * inv;
+	return fmaf(1.0f - r0, inv5, r0);
 }
 
-__device__ __host__ inline bool Refract(const Vec3& v, const Vec3& n, float niOverNt, Vec3& outRefracted)
+// Branchless refract candidate: sqrtk is zero if total internal reflection
+__device__ __host__ CPU_ONLY_INLINE Vec3 RefractBranchless(const Vec3& v, const Vec3& n, float etaiOverEtat)
 {
-	const float dt = glm::dot(v, n);
-	if (float discriminant = 1.f - niOverNt * niOverNt * (1.f - dt * dt); discriminant > 0.0f)
-	{
-		outRefracted = niOverNt * (v - n * dt) - n * glm::sqrt(discriminant);
-		return true;
-	}
-	return false;
-}
-
-__device__ __host__ inline float Reflectance(const float cosine, const float refIdx)
-{
-	// Schlick's approximation
-	float r0 = (1.f - refIdx) / (1.f + refIdx);
-	r0		 = r0 * r0;
-	return r0 + (1.f - r0) * powf((1.f - cosine), 5.f);
+	float dt	= dot(v, n);
+	float k		= 1.0f - etaiOverEtat * etaiOverEtat * (1.0f - dt * dt);
+	float sqrtk = sqrtf(fmaxf(k, 0.0f));
+	return etaiOverEtat * (v - n * dt) - n * sqrtk;
 }

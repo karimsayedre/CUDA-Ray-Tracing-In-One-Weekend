@@ -27,5 +27,10 @@
 #	define CPU_ONLY_INLINE // No need for inline, inline prevents NVCC from showing these functions in PTXAS info too.
 #else
 #	define CPU_ONLY_INLINE inline
+#	define fmaxf			glm::max
+#	define fminf			glm::min
 #endif
-using Vec3 = glm::vec<3, float, glm::aligned_mediump>;
+
+using Vec2				  = glm::vec<2, float, glm::aligned_mediump>;
+using Vec3				  = glm::vec<3, float, glm::aligned_mediump>;
+static constexpr float PI = std::numbers::pi_v<float>;

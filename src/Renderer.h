@@ -3,6 +3,7 @@
 #include "Camera.h"
 #include <chrono>
 
+#include "AABB.h"
 #include "CPU_GPU.h"
 #include "SFML/System/Vector2.hpp"
 
@@ -37,8 +38,8 @@ struct RenderParams
 	CameraPOD			Camera {};
 	float4				ResolutionInfo {}; // x: x Pixel Size, y: y Pixel Size, z: width, w: height
 	cudaSurfaceObject_t Image {};
-	uint32_t			m_SamplesPerPixel {};
-	uint32_t			m_MaxDepth {};
+	uint16_t			m_SamplesPerPixel {};
+	uint16_t			m_MaxDepth {};
 	float				m_ColorMul {};
 };
 

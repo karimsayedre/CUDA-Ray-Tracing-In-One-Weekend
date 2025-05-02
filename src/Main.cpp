@@ -52,7 +52,7 @@ static sf::Image Render(const uint32_t initialWidth, const uint32_t initialHeigh
 			{
 				cudaSurfaceObject_t surface = cudaSurface.BeginFrame();
 				timeTaken					= cudaRenderer.Render(sharedDimensions, surface, moveCamera).count();
-				cudaSurface.EndFrame(surface);
+				cudaSurface.EndFrame();
 			}
 
 			window.draw(sprite);
@@ -88,7 +88,7 @@ static sf::Image Render(const uint32_t initialWidth, const uint32_t initialHeigh
 			else if (const auto* resized = event->getIf<sf::Event::Resized>())
 			{
 				//  Signal the rendering thread first with the new dimensions
-				sharedDimensions.store({ std::max(resized->size.x, 1u), std::max(resized->size.y, 1u) }, std::memory_order_release);
+				sharedDimensions.store({ glm::max(resized->size.x, 1u), glm::max(resized->size.y, 1u) }, std::memory_order_release);
 			}
 			else if (const auto* keyReleased = event->getIf<sf::Event::KeyReleased>())
 			{

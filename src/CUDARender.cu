@@ -54,13 +54,11 @@ __global__ void RenderKernel()
 	if ((x >= params->ResolutionInfo.z) || (y >= params->ResolutionInfo.w))
 		return;
 
-	const uint32_t pixelIndex = y * params->ResolutionInfo.z + x;
-
-	uint32_t seed = params->RandSeeds[pixelIndex];
+	uint32_t seed = params->RandSeeds[uint32_t(y * params->ResolutionInfo.z + x)];
 
 	Vec3 pixelColor(0.0f);
 
-	for (uint32_t s = 0; s < params->m_SamplesPerPixel; s++)
+	for (uint16_t s = 0; s < params->m_SamplesPerPixel; s++)
 	{
 		const float2 uv = float2 { (x + RandomFloat(seed)) * params->ResolutionInfo.x, 1.0f - (y + RandomFloat(seed)) * params->ResolutionInfo.y };
 
@@ -69,7 +67,7 @@ __global__ void RenderKernel()
 		pixelColor += RayColor(ray, seed);
 	}
 
-	params->RandSeeds[pixelIndex] = seed;
+	params->RandSeeds[uint32_t(y * params->ResolutionInfo.z + x)] = seed;
 	pixelColor *= params->m_ColorMul;
 	pixelColor = glm::sqrt(pixelColor);
 

@@ -10,9 +10,9 @@ namespace Hitables
 	// Note: Could use this as a class with member functions but NVCC wouldn't show them in PTXAS info
 	struct PrimitiveList
 	{
-		Vec3*	 Centers;
-		float*	 Radii;
-		AABB*	 AABBs;
+		Vec3* __restrict__ Centers;
+		float* __restrict__ Radii;
+		AABB* __restrict__ AABBs;
 		uint16_t Count = 0;
 	};
 
@@ -66,8 +66,17 @@ namespace Hitables
 			return false;
 
 		// Compute intersection data
-		record.Location		  = ray.PointAtT(t);
-		record.Normal		  = (record.Location - params->List->Centers[sphereIndex]) * (1.0f / params->List->Radii[sphereIndex]); // Normalize using multiplication
+		record.Location = ray.PointAtT(t);
+
+		const float invRadius = 1.0f / params->List->Radii[sphereIndex];
+		const Vec3	negCenter = -params->List->Centers[sphereIndex];
+#ifdef __CUDA_ARCH__
+		record.Normal.x = fmaf(record.Location.x, invRadius, negCenter.x * invRadius);
+		record.Normal.y = fmaf(record.Location.y, invRadius, negCenter.y * invRadius);
+		record.Normal.z = fmaf(record.Location.z, invRadius, negCenter.z * invRadius);
+#else
+		record.Normal = (record.Location + negCenter) * invRadius; // Normalize using multiplication
+#endif
 		record.PrimitiveIndex = sphereIndex;
 
 		tMax = t; // Update tMax for the next intersection test

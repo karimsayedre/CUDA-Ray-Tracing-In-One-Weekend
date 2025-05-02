@@ -1,4 +1,7 @@
 #pragma once
+#include <numbers>
+
+#include "pch.h"
 #include "Random.h"
 #include "Vec3.h"
 
@@ -14,10 +17,10 @@ namespace Mat
 	// Note: Could use this as a class with member functions but NVCC wouldn't show them in PTXAS info
 	struct Materials
 	{
-		Vec3*  Albedo;
-		float* Fuzz;
-		float* Ior;
-		Vec3*  Flags;
+		Vec3* __restrict__ Albedo;
+		float* __restrict__ Fuzz;
+		float* __restrict__ Ior;
+		Vec3* __restrict__ Flags;
 
 		uint32_t Count = 0;
 	};
@@ -41,7 +44,6 @@ namespace Mat
 		return d_Materials;
 	}
 
-	// ReSharper disable once CppNonInlineFunctionDefinitionInHeaderFile
 	__device__ __host__ CPU_ONLY_INLINE void Add(const MaterialType type, const Vec3& albedo, const float fuzz = 0.0f, const float ior = 1.0f)
 	{
 		const RenderParams* params = GetParams();
@@ -72,57 +74,54 @@ namespace Mat
 		params->Materials->Count++;
 	}
 
-	// ReSharper disable once CppNonInlineFunctionDefinitionInHeaderFile
-	__device__ __host__ CPU_ONLY_INLINE bool Scatter(Ray& incomingRay, const HitRecord& rec, Vec3& currAttenuation, uint32_t& randSeed)
+	__device__ __host__ CPU_ONLY_INLINE bool Scatter(Ray& ray, const HitRecord& rec, Vec3& attenuation, uint32_t& randSeed)
 	{
 		const RenderParams* params = GetParams();
+		const auto&			m	   = params->Materials;
 
-		// 1. Get one random vector for all calculations
-		const Vec3 randomVec = RandomVec3(randSeed);
-		currAttenuation *= params->Materials->Albedo[rec.PrimitiveIndex];
+		Vec3  albedo = m->Albedo[rec.PrimitiveIndex];
+		float fuzz	 = m->Fuzz[rec.PrimitiveIndex];
+		float ior	 = m->Ior[rec.PrimitiveIndex];
+		Vec3  w		 = m->Flags[rec.PrimitiveIndex];
 
-		// 2. Lambert direction - immediate computation
-		Vec3		lambertDir	  = rec.Normal + randomVec;
-		const float lambertDirLen = glm::length(lambertDir);
-		lambertDir				  = lambertDirLen > 0.001f ? lambertDir / lambertDirLen : rec.Normal;
+		// normalize weights
+		float sumW	= w.x + w.y + w.z + 1e-6f;
+		Vec3  normW = w / sumW;
 
-		// 3. Metal direction - immediate computation
-		const Vec3 reflected = Reflect(incomingRay.Direction, rec.Normal);
-		const Vec3 metalDir	 = reflected + randomVec * params->Materials->Fuzz[rec.PrimitiveIndex];
+		const Vec3 rand3 = RandomVec3(randSeed);
 
-		// 4. Dielectric direction - computation with reused variables
-		Vec3 dielectricDir;
-		{
-			const float ior			  = params->Materials->Ior[rec.PrimitiveIndex];
-			const float dotRayNormal  = dot(incomingRay.Direction, rec.Normal);
-			const bool	frontFace	  = dotRayNormal < 0.0f;
-			const Vec3& outwardNormal = frontFace ? rec.Normal : -rec.Normal;
-			const float niOverNt	  = frontFace ? (1.0f / ior) : ior;
-			const float cosine		  = frontFace ? -dotRayNormal : dotRayNormal;
+		// Precompute directions
+		const Vec3& unitDir	   = ray.Direction; // already normalized
+		Vec3		lambertDir = normalize(rec.Normal + rand3);
+		Vec3		metalRef   = reflect(unitDir, rec.Normal);
+		Vec3		metalDir   = metalRef + fuzz * rand3;
 
-			Vec3		refracted;
-			const bool	canRefract	 = Refract(incomingRay.Direction, outwardNormal, niOverNt, refracted);
-			const float reflectProb	 = canRefract ? Reflectance(cosine, ior) : 1.0f;
-			const Vec3	reflectedDir = Reflect(incomingRay.Direction, outwardNormal);
-			dielectricDir			 = RandomFloat(randSeed) < reflectProb ? reflectedDir : refracted;
-		}
+		// Dielectric components using faceNormal
+		float frontFaceMask = float(dot(unitDir, rec.Normal) < 0.0f);
+		Vec3  faceNormal	= frontFaceMask * rec.Normal + (1.0f - frontFaceMask) * -rec.Normal;
+		float cosTheta		= fminf(dot(-unitDir, faceNormal), 1.0f);
+		float sinTheta		= sqrtf(fmaxf(0.0f, 1.0f - cosTheta * cosTheta));
+		float etaiOverEtat	= frontFaceMask * (1.0f / ior) + (1.0f - frontFaceMask) * ior;
+		float cannotRefract = float(etaiOverEtat * sinTheta > 1.0f);
+		float reflectProb	= cannotRefract + (1.0f - cannotRefract) * Schlick(cosTheta, ior);
+		float rnd			= RandomFloat(randSeed);
+		float isReflect		= float(rnd < reflectProb);
 
-		// 5. Material weights - compute once
-		const Vec3	flags		   = params->Materials->Flags[rec.PrimitiveIndex];
-		const float totalWeight	   = flags.x + flags.y + flags.z;
-		const float invTotalWeight = totalWeight > 0.0001f ? 1.0f / totalWeight : 0.0f;
+		Vec3 refracted = RefractBranchless(unitDir, faceNormal, etaiOverEtat);
+		Vec3 dielecDir = isReflect * reflect(unitDir, faceNormal) + (1.0f - isReflect) * refracted;
 
-		// 6. Blend directions - direct computation with minimal temporaries
-		const Vec3 finalDir = lambertDir * (flags.x * invTotalWeight) + metalDir * (flags.y * invTotalWeight) + dielectricDir * (flags.z * invTotalWeight);
+		// Composite direction and normalize
+		Vec3 dir = lambertDir * normW.x + metalDir * normW.y + dielecDir * normW.z;
+		ray		 = Ray(rec.Location, normalize(dir));
 
-		// 7. Check valid scatter
-		const float scatterDot	 = dot(finalDir, rec.Normal);
-		const bool	validScatter = (scatterDot > 0.0f) || (flags.z > 0.0f);
+		// Branchless attenuation: lambert & metal albedo, dielectric = 1
+		Vec3 att = albedo * (normW.x + normW.y) + Vec3(1.0f) * normW.z;
+		attenuation *= att * sumW;
+#if 1
+		const float scatterDot = dot(dir, rec.Normal);
+		return (scatterDot > 0.0f) || (w.z > 0.0f);
 
-		// 8. Apply attenuation and update ray
-		incomingRay = { rec.Location, finalDir };
-
-		return validScatter;
+#endif
 	}
 
 } // namespace Mat

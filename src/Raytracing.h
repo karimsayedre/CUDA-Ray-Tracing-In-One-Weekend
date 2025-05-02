@@ -104,7 +104,7 @@ __device__ __host__ CPU_ONLY_INLINE Vec3 RayColor(const Ray& ray, uint32_t& rand
 	Ray	 origRay = ray;
 	Vec3 curAttenuation(1.0f);
 
-	for (uint32_t i = 0; i < params->m_MaxDepth; i++)
+	for (uint16_t i = 0; i < params->m_MaxDepth; i++)
 	{
 		HitRecord rec;
 		// Early exit with sky color if no hit
@@ -117,7 +117,7 @@ __device__ __host__ CPU_ONLY_INLINE Vec3 RayColor(const Ray& ray, uint32_t& rand
 
 		// if (i > 3)
 		{
-			const float rrProb = glm::max(curAttenuation.x, glm::max(curAttenuation.y, curAttenuation.z));
+			const float rrProb = fmaxf(curAttenuation.x, fmaxf(curAttenuation.y, curAttenuation.z));
 
 			// Early termination with zero - saves registers by avoiding division
 			if (RandomFloat(randSeed) > rrProb)
@@ -129,7 +129,7 @@ __device__ __host__ CPU_ONLY_INLINE Vec3 RayColor(const Ray& ray, uint32_t& rand
 
 		// Early exit on no scatter
 		if (!Mat::Scatter(origRay, rec, curAttenuation, randSeed))
-			return curAttenuation;
+			return Vec3(0.0f);
 	}
 
 	return curAttenuation; // Exceeded max depth

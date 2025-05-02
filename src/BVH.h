@@ -7,14 +7,15 @@ namespace BVH
 	// Note: Could use this as a class with member functions but NVCC wouldn't show them in PTXAS info
 	struct alignas(32) BVHSoA
 	{
-		struct BVHNode
-		{
-			uint16_t Left;	// Index of left child (or sphere index for leaves)
-			uint16_t Right; // Index of right child (unused for leaves)
-		};
-		BVHNode* m_Nodes;
+		// struct BVHNode
+		//{
+		//	uint16_t Left;	// Index of left child (or sphere index for leaves)
+		//	uint16_t Right; // Index of right child (unused for leaves)
+		// };
+		uint16_t* __restrict__ m_LeftNodes;
+		uint16_t* __restrict__ m_RightNodes;
 
-		AABB*	 m_Bounds;
+		AABB* __restrict__ m_Bounds;
 		uint16_t m_Count = 0;
 		uint16_t m_Root	 = 0;
 	};
@@ -23,8 +24,9 @@ namespace BVH
 	__host__ inline BVHSoA* Init(const uint32_t capacity)
 	{
 		BVHSoA h_BVH;
-		h_BVH.m_Bounds = MemPolicy<Mode>::template Alloc<AABB>(capacity);
-		h_BVH.m_Nodes  = MemPolicy<Mode>::template Alloc<BVHSoA::BVHNode>(capacity);
+		h_BVH.m_Bounds	   = MemPolicy<Mode>::template Alloc<AABB>(capacity);
+		h_BVH.m_LeftNodes  = MemPolicy<Mode>::template Alloc<uint16_t>(capacity);
+		h_BVH.m_RightNodes = MemPolicy<Mode>::template Alloc<uint16_t>(capacity);
 
 		BVHSoA* d_BVH = MemPolicy<Mode>::template Alloc<BVHSoA>(1);
 
@@ -36,13 +38,14 @@ namespace BVH
 		return d_BVH;
 	}
 
-	// ReSharper disable once CppNonInlineFunctionDefinitionInHeaderFile
 	__device__ __host__ CPU_ONLY_INLINE uint16_t AddNode(const uint16_t leftIdx, const uint16_t rightIdx, const AABB& box)
 	{
 		const RenderParams* params = GetParams();
 
-		params->BVH->m_Nodes[params->BVH->m_Count]	= BVHSoA::BVHNode { leftIdx, rightIdx };
-		params->BVH->m_Bounds[params->BVH->m_Count] = box;
+		params->BVH->m_LeftNodes[params->BVH->m_Count]	= leftIdx;
+		params->BVH->m_RightNodes[params->BVH->m_Count] = rightIdx;
+		params->BVH->m_Bounds[params->BVH->m_Count]		= box;
+
 		return params->BVH->m_Count++;
 	}
 
@@ -184,7 +187,6 @@ namespace BVH
 	}
 #endif
 
-	// ReSharper disable once CppNonInlineFunctionDefinitionInHeaderFile
 	__device__ __host__ CPU_ONLY_INLINE uint16_t Build(uint16_t* indices, uint16_t start, uint16_t end)
 	{
 		const RenderParams* params	   = GetParams();
@@ -314,7 +316,8 @@ namespace BVH
 		const uint16_t rightIdx = Build(indices, bestSplitIdx, end);
 
 		// Compute the combined bounding box from the actual child nodes
-		AABB		combined  = params->BVH->m_Bounds[leftIdx];
+		AABB combined = params->BVH->m_Bounds[leftIdx];
+
 		const AABB& rightAabb = params->BVH->m_Bounds[rightIdx];
 		combined			  = AABB(combined, rightAabb);
 
@@ -355,101 +358,111 @@ namespace BVH
 		{
 			assert(stackPtr < 16);
 
-			const BVH::BVHSoA::BVHNode& node = params->BVH->m_Nodes[currentNode];
+			const uint16_t leftNode	 = params->BVH->m_LeftNodes[currentNode];
+			const uint16_t rightNode = params->BVH->m_RightNodes[currentNode];
 
 			// Process leaf node
-			if (node.Right == UINT16_MAX)
+			if (rightNode == UINT16_MAX)
 			{
 				// Process hit test
-				hitAnything |= Hitables::IntersectPrimitive(ray, tmin, tmax, bestHit, node.Left);
+				hitAnything |= Hitables::IntersectPrimitive(ray, tmin, tmax, bestHit, leftNode);
 
 				currentNode = stackData[--stackPtr];
 				continue;
 			}
 
 #ifdef __CUDA_ARCH__
+			const Vec3 rayOriginMulNegInvDir = -ray.Origin * invDir;
+
 			// Check left child
-			const AABB& leftBounds = params->BVH->m_Bounds[node.Left];
-			float		tx1 = (leftBounds.Min.x - ray.Origin.x) * invDir.x, tx2 = (leftBounds.Max.x - ray.Origin.x) * invDir.x;
-			float		ty1 = (leftBounds.Min.y - ray.Origin.y) * invDir.y, ty2 = (leftBounds.Max.y - ray.Origin.y) * invDir.y;
-			float		tz1 = (leftBounds.Min.z - ray.Origin.z) * invDir.z, tz2 = (leftBounds.Max.z - ray.Origin.z) * invDir.z;
-			const float tEnterL	 = fmaxf(fmaxf(dirIsNeg[0] ? tx2 : tx1, dirIsNeg[1] ? ty2 : ty1), fmaxf(dirIsNeg[2] ? tz2 : tz1, tmin));
-			const float tExitL	 = fminf(fminf(dirIsNeg[0] ? tx1 : tx2, dirIsNeg[1] ? ty1 : ty2), fminf(dirIsNeg[2] ? tz1 : tz2, tmax));
-			const float distLeft = (tEnterL > tExitL) ? FLT_MAX : tEnterL;
+			const AABB& leftBounds = params->BVH->m_Bounds[leftNode];
+			float		tx0 = fmaf(invDir.x, leftBounds.Min.x, rayOriginMulNegInvDir.x), tx1 = fmaf(invDir.x, leftBounds.Max.x, rayOriginMulNegInvDir.x);
+			float		ty0 = fmaf(invDir.y, leftBounds.Min.y, rayOriginMulNegInvDir.y), ty1 = fmaf(invDir.y, leftBounds.Max.y, rayOriginMulNegInvDir.y);
+			float		tz0 = fmaf(invDir.z, leftBounds.Min.z, rayOriginMulNegInvDir.z), tz1 = fmaf(invDir.z, leftBounds.Max.z, rayOriginMulNegInvDir.z);
+			const float tEnterL = fmaxf(fmaxf(dirIsNeg[0] ? tx1 : tx0, dirIsNeg[1] ? ty1 : ty0), fmaxf(dirIsNeg[2] ? tz1 : tz0, tmin));
+			const float tExitL	= fminf(fminf(dirIsNeg[0] ? tx0 : tx1, dirIsNeg[1] ? ty0 : ty1), fminf(dirIsNeg[2] ? tz0 : tz1, tmax));
+			bool		hitLeft = tEnterL <= tExitL;
 
 			// Check right child
-			const AABB& rightBounds = params->BVH->m_Bounds[node.Right];
-			tx1 = (rightBounds.Min.x - ray.Origin.x) * invDir.x, tx2 = (rightBounds.Max.x - ray.Origin.x) * invDir.x;
-			ty1 = (rightBounds.Min.y - ray.Origin.y) * invDir.y, ty2 = (rightBounds.Max.y - ray.Origin.y) * invDir.y;
-			tz1 = (rightBounds.Min.z - ray.Origin.z) * invDir.z, tz2 = (rightBounds.Max.z - ray.Origin.z) * invDir.z;
-			const float tEnterR	  = fmaxf(fmaxf(dirIsNeg[0] ? tx2 : tx1, dirIsNeg[1] ? ty2 : ty1), fmaxf(dirIsNeg[2] ? tz2 : tz1, tmin));
-			const float tExitR	  = fminf(fminf(dirIsNeg[0] ? tx1 : tx2, dirIsNeg[1] ? ty1 : ty2), fminf(dirIsNeg[2] ? tz1 : tz2, tmax));
-			const float distRight = (tEnterR > tExitR) ? FLT_MAX : tEnterR;
+			const AABB& rightBounds = params->BVH->m_Bounds[rightNode];
+			tx0 = fmaf(invDir.x, rightBounds.Min.x, rayOriginMulNegInvDir.x), tx1 = fmaf(invDir.x, rightBounds.Max.x, rayOriginMulNegInvDir.x);
+			ty0 = fmaf(invDir.y, rightBounds.Min.y, rayOriginMulNegInvDir.y), ty1 = fmaf(invDir.y, rightBounds.Max.y, rayOriginMulNegInvDir.y);
+			tz0 = fmaf(invDir.z, rightBounds.Min.z, rayOriginMulNegInvDir.z), tz1 = fmaf(invDir.z, rightBounds.Max.z, rayOriginMulNegInvDir.z);
+			const float tEnterR	 = fmaxf(fmaxf(dirIsNeg[0] ? tx1 : tx0, dirIsNeg[1] ? ty1 : ty0), fmaxf(dirIsNeg[2] ? tz1 : tz0, tmin));
+			const float tExitR	 = fminf(fminf(dirIsNeg[0] ? tx0 : tx1, dirIsNeg[1] ? ty0 : ty1), fminf(dirIsNeg[2] ? tz0 : tz1, tmax));
+			bool		hitRight = tEnterR <= tExitR;
+
+			uint16_t closerChild  = tEnterL > tEnterR ? rightNode : leftNode;
+			uint16_t fartherChild = tEnterL > tEnterR ? leftNode : rightNode;
+
+			// takeLeft = distLeft <= distRight;
 #else
-			auto slabTest = [&](const AABB& b) -> float
+			uint16_t closerChild;
+			uint16_t fartherChild;
+			auto	 slabTest = [&](const AABB& b, const bool first) -> bool
 			{
 				float tEnterL = tmin, tExitL = tmax;
 
 				// X slab
 				float t0 = ((dirIsNeg[0] ? b.Max.x : b.Min.x) - ray.Origin.x) * invDir.x;
 				float t1 = ((dirIsNeg[0] ? b.Min.x : b.Max.x) - ray.Origin.x) * invDir.x;
-				tEnterL	 = std::max(t0, tEnterL);
-				tExitL	 = std::min(t1, tExitL);
+				tEnterL	 = glm::max(t0, tEnterL);
+				tExitL	 = glm::min(t1, tExitL);
 				if (tExitL < tEnterL)
-					return FLT_MAX;
+					return false;
 
 				// Y slab
 				t0		= ((dirIsNeg[1] ? b.Max.y : b.Min.y) - ray.Origin.y) * invDir.y;
 				t1		= ((dirIsNeg[1] ? b.Min.y : b.Max.y) - ray.Origin.y) * invDir.y;
-				tEnterL = std::max(t0, tEnterL);
-				tExitL	= std::min(t1, tExitL);
+				tEnterL = glm::max(t0, tEnterL);
+				tExitL	= glm::min(t1, tExitL);
 				if (tExitL < tEnterL)
-					return FLT_MAX;
+					return false;
 
 				// Z slab
 				t0		= ((dirIsNeg[2] ? b.Max.z : b.Min.z) - ray.Origin.z) * invDir.z;
 				t1		= ((dirIsNeg[2] ? b.Min.z : b.Max.z) - ray.Origin.z) * invDir.z;
-				tEnterL = std::max(t0, tEnterL);
-				tExitL	= std::min(t1, tExitL);
+				tEnterL = glm::max(t0, tEnterL);
+				tExitL	= glm::min(t1, tExitL);
 				if (tExitL < tEnterL)
-					return FLT_MAX;
+					return false;
 
-				return tEnterL;
+				closerChild	 = first ? leftNode : rightNode;
+				fartherChild = first ? rightNode : leftNode;
+
+				return true;
 			};
 
 			// replace your two big blocks with:
-			float distLeft	= slabTest(params->BVH->m_Bounds[node.Left]);
-			float distRight = slabTest(params->BVH->m_Bounds[node.Right]);
+			const bool hitLeft	= slabTest(params->BVH->m_Bounds[leftNode], true);
+			const bool hitRight = slabTest(params->BVH->m_Bounds[rightNode], false);
 #endif
 
-			// Neither child was hit
-			if (distLeft == FLT_MAX && distRight == FLT_MAX)
+			// Resolve everything immediately
+			uint16_t first, second;
+			bool	 doTraverseSecond = false;
+
+			if (hitLeft & hitRight)
+			{
+				// Resolve early which side is first
+				first			 = closerChild;
+				second			 = fartherChild;
+				doTraverseSecond = true;
+			}
+			else if (hitLeft ^ hitRight)
+			{
+				first = hitLeft ? leftNode : rightNode;
+			}
+			else // noneHit
 			{
 				currentNode = stackData[--stackPtr];
 				continue;
 			}
 
-			// Both children hit - traverse closer one first
-			if (distLeft != FLT_MAX && distRight != FLT_MAX)
-			{
-				if (distLeft <= distRight)
-				{
-					// Left is closer
-					currentNode			  = node.Left;
-					stackData[stackPtr++] = node.Right;
-				}
-				else
-				{
-					// Right is closer
-					currentNode			  = node.Right;
-					stackData[stackPtr++] = node.Left;
-				}
-
-				continue;
-			}
-
-			// Only one child was hit
-			currentNode = (distLeft != FLT_MAX) ? node.Left : node.Right;
+			// Continue traversal
+			currentNode = first;
+			if (doTraverseSecond)
+				stackData[stackPtr++] = second;
 		}
 
 		return hitAnything;
