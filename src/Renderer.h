@@ -26,7 +26,7 @@ struct alignas(64) HitRecord
 {
 	Vec3	 Location;
 	Vec3	 Normal;
-	uint16_t PrimitiveIndex;
+	uint32_t PrimitiveIndex;
 };
 
 struct RenderParams
@@ -38,8 +38,8 @@ struct RenderParams
 	CameraPOD			Camera {};
 	float4				ResolutionInfo {}; // x: x Pixel Size, y: y Pixel Size, z: width, w: height
 	cudaSurfaceObject_t Image {};
-	uint16_t			m_SamplesPerPixel {};
-	uint16_t			m_MaxDepth {};
+	uint32_t			m_SamplesPerPixel {};
+	uint32_t			m_MaxDepth {};
 	float				m_ColorMul {};
 };
 

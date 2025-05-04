@@ -94,7 +94,7 @@ namespace Mat
 		const Vec3& unitDir	   = ray.Direction; // already normalized
 		Vec3		lambertDir = normalize(rec.Normal + rand3);
 		Vec3		metalRef   = reflect(unitDir, rec.Normal);
-		Vec3		metalDir   = metalRef + fuzz * rand3;
+		Vec3		metalDir   = normalize(metalRef + fuzz * rand3);
 
 		// Dielectric components using faceNormal
 		float frontFaceMask = float(dot(unitDir, rec.Normal) < 0.0f);
@@ -117,11 +117,10 @@ namespace Mat
 		// Branchless attenuation: lambert & metal albedo, dielectric = 1
 		Vec3 att = albedo * (normW.x + normW.y) + Vec3(1.0f) * normW.z;
 		attenuation *= att * sumW;
-#if 1
+
+		// Early exit on no scatter
 		const float scatterDot = dot(dir, rec.Normal);
 		return (scatterDot > 0.0f) || (w.z > 0.0f);
-
-#endif
 	}
 
 } // namespace Mat

@@ -72,8 +72,8 @@ __device__ __host__ CPU_ONLY_INLINE void CreateWorld()
 	Mat::Add(Mat::MaterialType::Metal, Vec3(0.7f, 0.6f, 0.5f), 0.0f, 1.0f);
 	Hitables::Add(Vec3(4, 1, 0), 1.0f);
 
-	uint16_t* indices = static_cast<uint16_t*>(malloc(params->List->Count * sizeof(uint16_t)));
-	for (uint16_t index = 0; index < params->List->Count; ++index)
+	uint32_t* indices = static_cast<uint32_t*>(malloc(params->List->Count * sizeof(uint32_t)));
+	for (uint32_t index = 0; index < params->List->Count; ++index)
 		indices[index] = index;
 
 	params->BVH->m_Root = BVH::Build(indices, 0, params->List->Count);
@@ -104,15 +104,15 @@ __device__ __host__ CPU_ONLY_INLINE Vec3 RayColor(const Ray& ray, uint32_t& rand
 	Ray	 origRay = ray;
 	Vec3 curAttenuation(1.0f);
 
-	for (uint16_t i = 0; i < params->m_MaxDepth; i++)
+	for (uint32_t i = 0; i < params->m_MaxDepth; i++)
 	{
 		HitRecord rec;
 		// Early exit with sky color if no hit
 		if (!BVH::Traverse(origRay, 0.001f, FLT_MAX, rec))
 		{
 			// Streamlined sky color calculation
-			const float t = (0.5f) * (origRay.Direction.y + 1.0f);
-			return curAttenuation * ((1.0f - t) * 1.0f + t * Vec3(0.5f, 0.7f, 1.0f));
+			const float t = 0.5f * (origRay.Direction.y + 1.0f);
+			return curAttenuation * ((1.0f - t) + t * Vec3(0.5f, 0.7f, 1.0f));
 		}
 
 		// if (i > 3)

@@ -13,7 +13,7 @@ namespace Hitables
 		Vec3* __restrict__ Centers;
 		float* __restrict__ Radii;
 		AABB* __restrict__ AABBs;
-		uint16_t Count = 0;
+		uint32_t Count = 0;
 	};
 
 	template<ExecutionMode Mode>
@@ -44,7 +44,7 @@ namespace Hitables
 		params->List->Count++;
 	}
 
-	__device__ __host__ CPU_ONLY_INLINE bool IntersectPrimitive(const Ray& ray, const float tMin, float& tMax, HitRecord& record, const uint16_t sphereIndex)
+	__device__ __host__ CPU_ONLY_INLINE bool IntersectPrimitive(const Ray& ray, const float tMin, float& tMax, HitRecord& record, const uint32_t sphereIndex)
 	{
 		const RenderParams* __restrict__ params = GetParams();
 		const Vec3	oc							= ray.Origin - params->List->Centers[sphereIndex];

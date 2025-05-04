@@ -7,26 +7,24 @@ namespace BVH
 	// Note: Could use this as a class with member functions but NVCC wouldn't show them in PTXAS info
 	struct alignas(32) BVHSoA
 	{
-		// struct BVHNode
-		//{
-		//	uint16_t Left;	// Index of left child (or sphere index for leaves)
-		//	uint16_t Right; // Index of right child (unused for leaves)
-		// };
-		uint16_t* __restrict__ m_LeftNodes;
-		uint16_t* __restrict__ m_RightNodes;
+		struct BVHNode
+		{
+			uint32_t Left;	// Index of left child (or sphere index for leaves)
+			uint32_t Right; // Index of right child (unused for leaves)
+		};
+		BVHNode* __restrict__ m_Nodes;
 
 		AABB* __restrict__ m_Bounds;
-		uint16_t m_Count = 0;
-		uint16_t m_Root	 = 0;
+		uint32_t m_Count = 0;
+		uint32_t m_Root	 = 0;
 	};
 
 	template<ExecutionMode Mode>
 	__host__ inline BVHSoA* Init(const uint32_t capacity)
 	{
 		BVHSoA h_BVH;
-		h_BVH.m_Bounds	   = MemPolicy<Mode>::template Alloc<AABB>(capacity);
-		h_BVH.m_LeftNodes  = MemPolicy<Mode>::template Alloc<uint16_t>(capacity);
-		h_BVH.m_RightNodes = MemPolicy<Mode>::template Alloc<uint16_t>(capacity);
+		h_BVH.m_Bounds = MemPolicy<Mode>::template Alloc<AABB>(capacity);
+		h_BVH.m_Nodes  = MemPolicy<Mode>::template Alloc<BVHSoA::BVHNode>(capacity);
 
 		BVHSoA* d_BVH = MemPolicy<Mode>::template Alloc<BVHSoA>(1);
 
@@ -38,22 +36,22 @@ namespace BVH
 		return d_BVH;
 	}
 
-	__device__ __host__ CPU_ONLY_INLINE uint16_t AddNode(const uint16_t leftIdx, const uint16_t rightIdx, const AABB& box)
+	__device__ __host__ CPU_ONLY_INLINE uint32_t AddNode(const uint32_t leftIdx, const uint32_t rightIdx, const AABB& box)
 	{
 		const RenderParams* __restrict__ params = GetParams();
 
-		params->BVH->m_LeftNodes[params->BVH->m_Count]	= leftIdx;
-		params->BVH->m_RightNodes[params->BVH->m_Count] = rightIdx;
-		params->BVH->m_Bounds[params->BVH->m_Count]		= box;
+		params->BVH->m_Nodes[params->BVH->m_Count] = { leftIdx, rightIdx };
+		// params->BVH->m_RightNodes[params->BVH->m_Count] = rightIdx;
+		params->BVH->m_Bounds[params->BVH->m_Count] = box;
 
 		return params->BVH->m_Count++;
 	}
 
 #ifdef RTIOW_BVH_VEB // can be more significant if we have a lot of nodes that they don't fit L1 cache
-	__device__ __host__ void ReorderVEB(uint16_t nodeIdx, uint16_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint16_t& newIndex, int currentDepth, int treeHeight);
+	__device__ __host__ void ReorderVEB(uint32_t nodeIdx, uint32_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint32_t& newIndex, int currentDepth, int treeHeight);
 
 	// Helper function for recursion with depth limits
-	__device__ __host__ CPU_ONLY_INLINE void ReorderVEBRecursive(uint16_t nodeIdx, uint16_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint16_t& newIndex, int currentDepth, int depthLimit, int treeHeight)
+	__device__ __host__ CPU_ONLY_INLINE void ReorderVEBRecursive(uint32_t nodeIdx, uint32_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint32_t& newIndex, int currentDepth, int depthLimit, int treeHeight)
 	{
 		// Return if node is invalid
 		if (nodeIdx == UINT16_MAX)
@@ -98,7 +96,7 @@ namespace BVH
 	}
 
 	// Recursive function to reorder the nodes in a van Emde Boas layout
-	__device__ __host__ CPU_ONLY_INLINE void ReorderVEB(uint16_t nodeIdx, uint16_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint16_t& newIndex, int currentDepth, int treeHeight)
+	__device__ __host__ CPU_ONLY_INLINE void ReorderVEB(uint32_t nodeIdx, uint32_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint32_t& newIndex, int currentDepth, int treeHeight)
 	{
 		// Return if node is invalid
 		if (nodeIdx == UINT16_MAX)
@@ -140,7 +138,7 @@ namespace BVH
 		ReorderVEBRecursive(node.Right, nodeMap, tempNodes, tempBounds, newIndex, currentDepth + 1, currentDepth + upperHeight, treeHeight);
 	}
 
-	__device__ __host__ CPU_ONLY_INLINE uint16_t ReorderBVH()
+	__device__ __host__ CPU_ONLY_INLINE uint32_t ReorderBVH()
 	{
 		const RenderParams* __restrict__ params = GetParams();
 
@@ -149,21 +147,21 @@ namespace BVH
 		AABB*			 tempBounds = static_cast<AABB*>(malloc(params->BVH->m_Count * sizeof(AABB)));
 
 		// Create a map to store the old -> new node indices mapping
-		uint16_t* nodeMap = static_cast<uint16_t*>(malloc(params->BVH->m_Count * sizeof(uint16_t)));
+		uint32_t* nodeMap = static_cast<uint32_t*>(malloc(params->BVH->m_Count * sizeof(uint32_t)));
 
 		// Calculate the height of the tree (approximate for potentially unbalanced trees)
 		// For a binary tree with n nodes, height is approximately log2(n)
 		int treeHeight = static_cast<int>(log2f(static_cast<float>(params->BVH->m_Count))) + 1;
 
 		// First pass: Copy nodes to temp arrays in van Emde Boas layout
-		uint16_t newIndex = 0;
+		uint32_t newIndex = 0;
 		ReorderVEB(params->BVH->m_Root, nodeMap, tempNodes, tempBounds, newIndex, 0, treeHeight);
 
 		// Save the new root index
-		uint16_t newRootIndex = nodeMap[params->BVH->m_Root];
+		uint32_t newRootIndex = nodeMap[params->BVH->m_Root];
 
 		// Second pass: Update child indices using the mapping
-		for (uint16_t i = 0; i < params->BVH->m_Count; ++i)
+		for (uint32_t i = 0; i < params->BVH->m_Count; ++i)
 		{
 			// If not a leaf node, update the child indices
 			if (tempNodes[i].Right != UINT16_MAX)
@@ -187,15 +185,15 @@ namespace BVH
 	}
 #endif
 
-	__device__ __host__ CPU_ONLY_INLINE uint16_t Build(uint16_t* indices, uint16_t start, uint16_t end)
+	__device__ __host__ CPU_ONLY_INLINE uint32_t Build(uint32_t* indices, uint32_t start, uint32_t end)
 	{
 		const RenderParams* __restrict__ params = GetParams();
-		const uint16_t objectSpan				= end - start;
+		const uint32_t objectSpan				= end - start;
 
 		// Compute bounding box for this node
 		AABB box;
 		bool firstBox = true;
-		for (uint16_t i = start; i < end; ++i)
+		for (uint32_t i = start; i < end; ++i)
 		{
 			uint32_t	sphereIndex = indices[i];
 			const AABB& currentBox	= params->List->AABBs[sphereIndex];
@@ -219,15 +217,15 @@ namespace BVH
 
 		if (objectSpan == 2)
 		{
-			uint16_t idxA = indices[start];
-			uint16_t idxB = indices[start + 1];
+			uint32_t idxA = indices[start];
+			uint32_t idxB = indices[start + 1];
 
 			// Create leaf nodes for each sphere
 			const AABB& boxA = params->List->AABBs[idxA];
 			const AABB& boxB = params->List->AABBs[idxB];
 
-			uint16_t leftLeaf  = AddNode(idxA, UINT16_MAX, boxA);
-			uint16_t rightLeaf = AddNode(idxB, UINT16_MAX, boxB);
+			uint32_t leftLeaf  = AddNode(idxA, UINT16_MAX, boxA);
+			uint32_t rightLeaf = AddNode(idxB, UINT16_MAX, boxB);
 
 			// Create parent internal node
 			const AABB combined(boxA, boxB);
@@ -236,14 +234,14 @@ namespace BVH
 
 		// Use SAH to find the best split
 		float	 bestCost	  = FLT_MAX;
-		uint16_t bestAxis	  = 0;
-		uint16_t bestSplitIdx = start + objectSpan / 2; // Default middle split as fallback
+		uint32_t bestAxis	  = 0;
+		uint32_t bestSplitIdx = start + objectSpan / 2; // Default middle split as fallback
 
 		// Cost of not splitting (creating a leaf)
 		// float no_split_cost = objectSpan * box.SurfaceArea();
 
 		// Try each axis
-		for (uint16_t axis = 0; axis < 3; ++axis)
+		for (uint32_t axis = 0; axis < 3; ++axis)
 		{
 			// Sort indices along this axis
 			auto comparator = [&](const uint32_t a, const uint32_t b)
@@ -256,7 +254,7 @@ namespace BVH
 			// Precompute all bounding boxes from left to right
 			AABB* leftBoxes = (AABB*)malloc(sizeof(AABB) * objectSpan);
 			leftBoxes[0]	= params->List->AABBs[indices[start]];
-			for (uint16_t i = 1; i < objectSpan; ++i)
+			for (uint32_t i = 1; i < objectSpan; ++i)
 			{
 				leftBoxes[i] = AABB(leftBoxes[i - 1], params->List->AABBs[indices[start + i]]);
 			}
@@ -270,7 +268,7 @@ namespace BVH
 			}
 
 			// Evaluate SAH cost for each possible split
-			for (uint16_t i = 1; i < objectSpan; ++i)
+			for (uint32_t i = 1; i < objectSpan; ++i)
 			{
 				const float leftCount  = i;
 				const float rightCount = (float)(objectSpan - i);
@@ -312,8 +310,8 @@ namespace BVH
 		}
 
 		// Recursively build children
-		const uint16_t leftIdx	= Build(indices, start, bestSplitIdx);
-		const uint16_t rightIdx = Build(indices, bestSplitIdx, end);
+		const uint32_t leftIdx	= Build(indices, start, bestSplitIdx);
+		const uint32_t rightIdx = Build(indices, bestSplitIdx, end);
 
 		// Compute the combined bounding box from the actual child nodes
 		AABB combined = params->BVH->m_Bounds[leftIdx];
@@ -329,8 +327,8 @@ namespace BVH
 		const RenderParams* __restrict__ params = GetParams();
 
 		// Use registers for stack instead of memory
-		uint16_t currentNode = params->BVH->m_Root;
-		uint16_t stackData[16];
+		uint32_t currentNode = params->BVH->m_Root;
+		uint32_t stackData[16];
 		int		 stackPtr	 = 0;
 		bool	 hitAnything = false;
 
@@ -345,14 +343,14 @@ namespace BVH
 		{
 			assert(stackPtr < 16);
 
-			const uint16_t leftNode	 = params->BVH->m_LeftNodes[currentNode];
-			const uint16_t rightNode = params->BVH->m_RightNodes[currentNode];
+			const BVHSoA::BVHNode& node = params->BVH->m_Nodes[currentNode];
+			// const uint32_t rightNode = params->BVH->m_RightNodes[currentNode];
 
 			// Process leaf node
-			if (rightNode == UINT16_MAX)
+			if (node.Right == UINT16_MAX)
 			{
 				// Process hit test
-				hitAnything |= Hitables::IntersectPrimitive(ray, tmin, tmax, bestHit, leftNode);
+				hitAnything |= Hitables::IntersectPrimitive(ray, tmin, tmax, bestHit, node.Left);
 
 				currentNode = stackData[--stackPtr];
 				continue;
@@ -361,7 +359,7 @@ namespace BVH
 #ifdef __CUDA_ARCH__
 
 			// Check left child
-			const AABB& leftBounds = params->BVH->m_Bounds[leftNode];
+			const AABB& leftBounds = params->BVH->m_Bounds[node.Left];
 			float		tx0 = fmaf(invDir.x, leftBounds.Min.x, rayOriginMulNegInvDir.x), tx1 = fmaf(invDir.x, leftBounds.Max.x, rayOriginMulNegInvDir.x);
 			float		ty0 = fmaf(invDir.y, leftBounds.Min.y, rayOriginMulNegInvDir.y), ty1 = fmaf(invDir.y, leftBounds.Max.y, rayOriginMulNegInvDir.y);
 			float		tz0 = fmaf(invDir.z, leftBounds.Min.z, rayOriginMulNegInvDir.z), tz1 = fmaf(invDir.z, leftBounds.Max.z, rayOriginMulNegInvDir.z);
@@ -370,7 +368,7 @@ namespace BVH
 			bool		hitLeft = tEnterL <= tExitL;
 
 			// Check right child
-			const AABB& rightBounds = params->BVH->m_Bounds[rightNode];
+			const AABB& rightBounds = params->BVH->m_Bounds[node.Right];
 			tx0 = fmaf(invDir.x, rightBounds.Min.x, rayOriginMulNegInvDir.x), tx1 = fmaf(invDir.x, rightBounds.Max.x, rayOriginMulNegInvDir.x);
 			ty0 = fmaf(invDir.y, rightBounds.Min.y, rayOriginMulNegInvDir.y), ty1 = fmaf(invDir.y, rightBounds.Max.y, rayOriginMulNegInvDir.y);
 			tz0 = fmaf(invDir.z, rightBounds.Min.z, rayOriginMulNegInvDir.z), tz1 = fmaf(invDir.z, rightBounds.Max.z, rayOriginMulNegInvDir.z);
@@ -378,13 +376,12 @@ namespace BVH
 			const float tExitR	 = fminf(fminf(fmaxf(tx0, tx1), fmaxf(ty0, ty1)), fminf(fmaxf(tz0, tz1), tmax));
 			bool		hitRight = tEnterR <= tExitR;
 
-			uint16_t closerChild  = tEnterL > tEnterR ? rightNode : leftNode;
-			uint16_t fartherChild = tEnterL > tEnterR ? leftNode : rightNode;
+			uint32_t closerChild  = tEnterL > tEnterR ? node.Right : node.Left;
+			uint32_t fartherChild = tEnterL > tEnterR ? node.Left : node.Right;
 
-			// takeLeft = distLeft <= distRight;
 #else
-			uint16_t closerChild;
-			uint16_t fartherChild;
+			uint32_t closerChild;
+			uint32_t fartherChild;
 			auto	 slabTest = [&](const AABB& b, const bool first) -> bool
 			{
 				float t0	 = fmaf(invDir.x, b.Min.x, rayOriginMulNegInvDir.x);
@@ -408,30 +405,30 @@ namespace BVH
 				if (tExit < tEnter)
 					return false;
 
-				closerChild	 = first ? leftNode : rightNode;
-				fartherChild = first ? rightNode : leftNode;
+				closerChild	 = first ? node.Left : node.Right;
+				fartherChild = first ? node.Right : node.Left;
 				return true;
 			};
 
 			// replace your two big blocks with:
-			const bool hitLeft	= slabTest(params->BVH->m_Bounds[leftNode], true);
-			const bool hitRight = slabTest(params->BVH->m_Bounds[rightNode], false);
+			const bool hitLeft	= slabTest(params->BVH->m_Bounds[node.Left], true);
+			const bool hitRight = slabTest(params->BVH->m_Bounds[node.Right], false);
 #endif
 
 			// Resolve everything immediately
-			uint16_t first, second;
-			bool	 doTraverseSecond = false;
+			uint32_t next;
+			bool	 doTraverseNext = false;
 
 			if (hitLeft & hitRight)
 			{
 				// Resolve early which side is first
-				first			 = closerChild;
-				second			 = fartherChild;
-				doTraverseSecond = true;
+				currentNode	   = closerChild;
+				next		   = fartherChild;
+				doTraverseNext = true;
 			}
 			else if (hitLeft ^ hitRight)
 			{
-				first = hitLeft ? leftNode : rightNode;
+				currentNode = hitLeft ? node.Left : node.Right;
 			}
 			else // noneHit
 			{
@@ -439,10 +436,8 @@ namespace BVH
 				continue;
 			}
 
-			// Continue traversal
-			currentNode = first;
-			if (doTraverseSecond)
-				stackData[stackPtr++] = second;
+			if (doTraverseNext)
+				stackData[stackPtr++] = next;
 		}
 
 		return hitAnything;

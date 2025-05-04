@@ -58,7 +58,7 @@ __global__ void RenderKernel()
 
 	Vec3 pixelColor(0.0f);
 
-	for (uint16_t s = 0; s < params->m_SamplesPerPixel; s++)
+	for (uint32_t s = 0; s < params->m_SamplesPerPixel; s++)
 	{
 		const float2 uv	 = float2 { (x + RandomFloat(seed)) * params->ResolutionInfo.x, 1.0f - (y + RandomFloat(seed)) * params->ResolutionInfo.y };
 		const Ray	 ray = reinterpret_cast<const Camera&>(params->Camera).GetRay(uv);
