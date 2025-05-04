@@ -29,6 +29,7 @@
 #	define CPU_ONLY_INLINE inline
 #	define fmaxf			glm::max
 #	define fminf			glm::min
+#	define fmaf			glm::fma
 #endif
 
 using Vec2				  = glm::vec<2, float, glm::aligned_mediump>;
