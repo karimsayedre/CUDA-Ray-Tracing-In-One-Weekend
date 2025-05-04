@@ -57,6 +57,12 @@ __host__ __device__ inline RenderParams* GetParams()
 #endif
 }
 
+constexpr int kFramesInFlight = 3;
+struct Frame
+{
+	cudaEvent_t Start, End;
+};
+
 template<ExecutionMode Mode>
 class Renderer
 {
@@ -88,5 +94,6 @@ class Renderer
 
 	sf::Vector2u m_Dims {};
 
-	cudaEvent_t m_StartEvent, m_EndEvent;
+	std::array<Frame, kFramesInFlight> m_Frames;
+	uint32_t						   m_SubmittedCount = 0, m_CompletedCount = 0;
 };

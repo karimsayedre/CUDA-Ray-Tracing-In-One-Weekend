@@ -21,7 +21,7 @@ __device__ __host__ CPU_ONLY_INLINE void DebugBVHNode(BVH::BVHSoA* soa, const ui
 	for (int i = 0; i < depth; i++)
 		printf("  ");
 
-	if (soa->m_Nodes[nodeIndex].Right == UINT16_MAX)
+	if (soa->m_Nodes[nodeIndex].Right == UINT32_MAX)
 	{
 		printf("Leaf Node %u: Sphere %u, Bounds: (%.2f,%.2f,%.2f) to (%.2f,%.2f,%.2f)\n",
 			   nodeIndex,

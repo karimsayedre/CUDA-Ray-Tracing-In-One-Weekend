@@ -40,8 +40,7 @@ namespace BVH
 	{
 		const RenderParams* __restrict__ params = GetParams();
 
-		params->BVH->m_Nodes[params->BVH->m_Count] = { leftIdx, rightIdx };
-		// params->BVH->m_RightNodes[params->BVH->m_Count] = rightIdx;
+		params->BVH->m_Nodes[params->BVH->m_Count]	= { leftIdx, rightIdx };
 		params->BVH->m_Bounds[params->BVH->m_Count] = box;
 
 		return params->BVH->m_Count++;
@@ -54,7 +53,7 @@ namespace BVH
 	__device__ __host__ CPU_ONLY_INLINE void ReorderVEBRecursive(uint32_t nodeIdx, uint32_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint32_t& newIndex, int currentDepth, int depthLimit, int treeHeight)
 	{
 		// Return if node is invalid
-		if (nodeIdx == UINT16_MAX)
+		if (nodeIdx == UINT32_MAX)
 			return;
 
 		const RenderParams* __restrict__ params = GetParams();
@@ -63,7 +62,7 @@ namespace BVH
 		const BVHSoA::BVHNode& node = params->BVH->m_Nodes[nodeIdx];
 
 		// For leaf nodes, just add them to the new array
-		if (node.Right == UINT16_MAX)
+		if (node.Right == UINT32_MAX)
 		{
 			// Store the mapping from old to new index
 			nodeMap[nodeIdx] = newIndex;
@@ -99,7 +98,7 @@ namespace BVH
 	__device__ __host__ CPU_ONLY_INLINE void ReorderVEB(uint32_t nodeIdx, uint32_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint32_t& newIndex, int currentDepth, int treeHeight)
 	{
 		// Return if node is invalid
-		if (nodeIdx == UINT16_MAX)
+		if (nodeIdx == UINT32_MAX)
 			return;
 		const RenderParams* __restrict__ params = GetParams();
 
@@ -107,7 +106,7 @@ namespace BVH
 		const BVHSoA::BVHNode& node = params->BVH->m_Nodes[nodeIdx];
 
 		// For leaf nodes, just add them to the new array
-		if (node.Right == UINT16_MAX)
+		if (node.Right == UINT32_MAX)
 		{
 			// Store the mapping from old to new index
 			nodeMap[nodeIdx] = newIndex;
@@ -164,7 +163,7 @@ namespace BVH
 		for (uint32_t i = 0; i < params->BVH->m_Count; ++i)
 		{
 			// If not a leaf node, update the child indices
-			if (tempNodes[i].Right != UINT16_MAX)
+			if (tempNodes[i].Right != UINT32_MAX)
 			{
 				tempNodes[i].Left  = nodeMap[tempNodes[i].Left];
 				tempNodes[i].Right = nodeMap[tempNodes[i].Right];
@@ -212,7 +211,7 @@ namespace BVH
 		if (objectSpan == 1)
 		{
 			// Leaf node: store sphere index
-			return AddNode(indices[start], UINT16_MAX, box);
+			return AddNode(indices[start], UINT32_MAX, box);
 		}
 
 		if (objectSpan == 2)
@@ -224,8 +223,8 @@ namespace BVH
 			const AABB& boxA = params->List->AABBs[idxA];
 			const AABB& boxB = params->List->AABBs[idxB];
 
-			uint32_t leftLeaf  = AddNode(idxA, UINT16_MAX, boxA);
-			uint32_t rightLeaf = AddNode(idxB, UINT16_MAX, boxB);
+			uint32_t leftLeaf  = AddNode(idxA, UINT32_MAX, boxA);
+			uint32_t rightLeaf = AddNode(idxB, UINT32_MAX, boxB);
 
 			// Create parent internal node
 			const AABB combined(boxA, boxB);
@@ -344,10 +343,9 @@ namespace BVH
 			assert(stackPtr < 16);
 
 			const BVHSoA::BVHNode& node = params->BVH->m_Nodes[currentNode];
-			// const uint32_t rightNode = params->BVH->m_RightNodes[currentNode];
 
 			// Process leaf node
-			if (node.Right == UINT16_MAX)
+			if (node.Right == UINT32_MAX)
 			{
 				// Process hit test
 				hitAnything |= Hitables::IntersectPrimitive(ray, tmin, tmax, bestHit, node.Left);

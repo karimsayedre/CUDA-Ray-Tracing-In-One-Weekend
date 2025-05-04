@@ -87,8 +87,11 @@ __host__ Renderer<Mode>::Renderer(const sf::Vector2u dims, const uint32_t sample
 		CHECK_CUDA_ERRORS(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
 
 		//  Create CUDA events for timing
-		CHECK_CUDA_ERRORS(cudaEventCreate(&m_StartEvent));
-		CHECK_CUDA_ERRORS(cudaEventCreate(&m_EndEvent));
+		for (auto& f : m_Frames)
+		{
+			CHECK_CUDA_ERRORS(cudaEventCreate(&f.Start));
+			CHECK_CUDA_ERRORS(cudaEventCreate(&f.End));
+		}
 	}
 
 	constexpr int numHitables = 22 * 22 + 1 + 3;
@@ -101,15 +104,15 @@ __host__ Renderer<Mode>::Renderer(const sf::Vector2u dims, const uint32_t sample
 
 	if constexpr (Mode == ExecutionMode::GPU)
 	{
-		CHECK_CUDA_ERRORS(cudaEventRecord(m_StartEvent));
+		CHECK_CUDA_ERRORS(cudaEventRecord(m_Frames[0].Start));
 		CreateWorldKernel<<<1, 1>>>();
 		CHECK_CUDA_ERRORS(cudaGetLastError());
-		CHECK_CUDA_ERRORS(cudaEventRecord(m_EndEvent));
+		CHECK_CUDA_ERRORS(cudaEventRecord(m_Frames[0].End));
 
-		CHECK_CUDA_ERRORS(cudaEventSynchronize(m_EndEvent));
+		CHECK_CUDA_ERRORS(cudaEventSynchronize(m_Frames[0].End));
 
 		float elapsedTimeMs;
-		CHECK_CUDA_ERRORS(cudaEventElapsedTime(&elapsedTimeMs, m_StartEvent, m_EndEvent));
+		CHECK_CUDA_ERRORS(cudaEventElapsedTime(&elapsedTimeMs, m_Frames[0].Start, m_Frames[0].End));
 		printf("CUDA BVH creation took: %.3f ms on GPU\n", elapsedTimeMs);
 
 		CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
@@ -167,6 +170,15 @@ template<>
 template<>
 std::chrono::duration<float, std::milli> Renderer<ExecutionMode::GPU>::Render(const sf::Vector2u& size, cudaSurfaceObject_t& surface, bool moveCamera)
 {
+	while (m_SubmittedCount - m_CompletedCount >= kFramesInFlight)
+	{
+		// wait for the oldest outstanding frame to finish:
+		uint32_t oldestIdx = m_CompletedCount % kFramesInFlight;
+		CHECK_CUDA_ERRORS(cudaEventSynchronize(m_Frames[oldestIdx].End));
+		// optionally read its timing here…
+		m_CompletedCount++;
+	}
+
 	if (moveCamera)
 		m_Camera.MoveAndLookAtSamePoint({ 0.1f, 0.0f, 0.f }, 10.0f);
 
@@ -175,19 +187,29 @@ std::chrono::duration<float, std::milli> Renderer<ExecutionMode::GPU>::Render(co
 	dim3 block(8, 8);
 	dim3 grid((size.x + block.x - 1) / block.x, (size.y + block.y - 1) / block.y);
 
-	// Record start event and launch kernel
-	CHECK_CUDA_ERRORS(cudaEventRecord(m_StartEvent));
+	// record & launch into current slot
+	int	  idx	= m_SubmittedCount % kFramesInFlight;
+	auto& frame = m_Frames[idx];
+	CHECK_CUDA_ERRORS(cudaEventRecord(frame.Start));
 	RenderKernel<<<grid, block>>>();
-	CHECK_CUDA_ERRORS(cudaGetLastError()); // Check for launch errors
-	CHECK_CUDA_ERRORS(cudaEventRecord(m_EndEvent));
+	CHECK_CUDA_ERRORS(cudaEventRecord(frame.End));
 
-	// Record end event and synchronize
-	CHECK_CUDA_ERRORS(cudaEventSynchronize(m_EndEvent));
+	m_SubmittedCount++;
 
-	// Calculate elapsed time
-	float elapsedTimeMs;
-	CHECK_CUDA_ERRORS(cudaEventElapsedTime(&elapsedTimeMs, m_StartEvent, m_EndEvent));
-	return std::chrono::duration<float, std::milli>(elapsedTimeMs);
+	// Optionally, query the *next* completed slot for your timing
+	float elapsedMs = 0.f;
+	if (m_SubmittedCount > kFramesInFlight)
+	{
+		int queryIdx = (m_CompletedCount) % kFramesInFlight;
+		if (cudaEventQuery(m_Frames[queryIdx].End) == cudaSuccess)
+		{
+			cudaEventElapsedTime(&elapsedMs,
+								 m_Frames[queryIdx].Start,
+								 m_Frames[queryIdx].End);
+			m_CompletedCount++;
+		}
+	}
+	return std::chrono::duration<float, std::milli>(elapsedMs > 0.f ? elapsedMs : 0.f);
 }
 
 template<ExecutionMode Mode>
@@ -215,8 +237,11 @@ __host__ Renderer<Mode>::~Renderer()
 	if constexpr (Mode == ExecutionMode::GPU)
 	{
 		// Cleanup events
-		CHECK_CUDA_ERRORS(cudaEventDestroy(m_StartEvent));
-		CHECK_CUDA_ERRORS(cudaEventDestroy(m_EndEvent));
+		for (auto& f : m_Frames)
+		{
+			CHECK_CUDA_ERRORS(cudaEventDestroy(f.Start));
+			CHECK_CUDA_ERRORS(cudaEventDestroy(f.End));
+		}
 
 		CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 	}

@@ -61,6 +61,7 @@ static sf::Image Render(const uint32_t initialWidth, const uint32_t initialHeigh
 			// Resize texture if dimensions have changed
 			if (const auto dims = sharedDimensions.load(std::memory_order_acquire); dims.x != texture.getSize().x || dims.y != texture.getSize().y)
 			{
+				CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 				cudaSurface.UnregisterSurface();
 				CHECK_BOOL(texture.resize(dims));
 				image.resize(dims);
