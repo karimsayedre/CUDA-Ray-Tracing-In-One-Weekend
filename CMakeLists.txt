@@ -162,6 +162,7 @@ target_compile_options(${PROJECT_NAME} PRIVATE
   -arch=sm_86
   -gencode=arch=compute_86,code=sm_86
   --default-stream per-thread
+  --expt-relaxed-constexpr
   -Xptxas=-v
   --source-in-ptx
   -lineinfo
@@ -178,6 +179,8 @@ target_compile_options(${PROJECT_NAME} PRIVATE
   -gencode=arch=compute_80,code=sm_80
   -gencode=arch=compute_86,code=sm_86
   -gencode=arch=compute_87,code=sm_87
+  -gencode=arch=compute_89,code=sm_89
+  -gencode=arch=compute_120,code=sm_120
   -gencode=arch=compute_86,code=compute_86
   >
 

@@ -3,8 +3,7 @@
 
 __device__ __host__ CPU_ONLY_INLINE float Schlick(float cosTheta, float refIdx)
 {
-	float r0 = (1.0f - refIdx) / (1.0f + refIdx);
-
+	float r0   = (1.0f - refIdx) / (1.0f + refIdx);
 	r0		   = r0 * r0;
 	float inv  = 1.0f - cosTheta;
 	float inv5 = inv * inv * inv * inv * inv;

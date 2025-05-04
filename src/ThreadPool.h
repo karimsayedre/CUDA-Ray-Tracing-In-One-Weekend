@@ -43,7 +43,8 @@ class ThreadPool
 	}
 
 	template<typename F, typename... Args>
-	auto Enqueue(F&& f, Args&&... args)
+	auto Enqueue(F&& f, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>>
+		requires std::invocable<F, Args...> && std::same_as<std::invoke_result_t<F, Args...>, void>
 	{
 		using ReturnType = std::invoke_result_t<F, Args...>;
 		auto taskPtr	 = std::make_shared<std::packaged_task<ReturnType()>>(

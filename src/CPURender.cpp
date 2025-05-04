@@ -21,8 +21,8 @@ __host__ std::chrono::duration<float, std::milli> Renderer<ExecutionMode::CPU>::
 	if (moveCamera)
 		m_Camera.MoveAndLookAtSamePoint({ 0.1f, 0.0f, 0.f }, 10.0f);
 
-	const std::chrono::high_resolution_clock::time_point start	= std::chrono::high_resolution_clock::now();
-	const RenderParams*									 params = GetParams();
+	const std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+	const RenderParams* __restrict__ params					   = GetParams();
 
 	constexpr uint32_t tileWidth  = 16;
 	constexpr uint32_t tileHeight = 16;

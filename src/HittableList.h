@@ -36,7 +36,7 @@ namespace Hitables
 
 	__device__ __host__ CPU_ONLY_INLINE void Add(const Vec3& position, const float radius)
 	{
-		const RenderParams* params = GetParams();
+		const RenderParams* __restrict__ params = GetParams();
 
 		params->List->Centers[params->List->Count] = position;
 		params->List->Radii[params->List->Count]   = radius;
@@ -46,12 +46,12 @@ namespace Hitables
 
 	__device__ __host__ CPU_ONLY_INLINE bool IntersectPrimitive(const Ray& ray, const float tMin, float& tMax, HitRecord& record, const uint16_t sphereIndex)
 	{
-		const RenderParams* params		 = GetParams();
-		const Vec3			oc			 = ray.Origin - params->List->Centers[sphereIndex];
-		const float			a			 = glm::dot(ray.Direction, ray.Direction);
-		const float			b			 = glm::dot(oc, ray.Direction);
-		const float			c			 = glm::dot(oc, oc) - params->List->Radii[sphereIndex] * params->List->Radii[sphereIndex];
-		const float			discriminant = b * b - a * c;
+		const RenderParams* __restrict__ params = GetParams();
+		const Vec3	oc							= ray.Origin - params->List->Centers[sphereIndex];
+		const float a							= glm::dot(ray.Direction, ray.Direction);
+		const float b							= glm::dot(oc, ray.Direction);
+		const float c							= glm::dot(oc, oc) - params->List->Radii[sphereIndex] * params->List->Radii[sphereIndex];
+		const float discriminant				= b * b - a * c;
 
 		if (discriminant <= 0.0f)
 			return false; // No intersection

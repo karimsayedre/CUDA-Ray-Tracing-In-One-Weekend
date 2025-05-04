@@ -40,7 +40,7 @@ namespace BVH
 
 	__device__ __host__ CPU_ONLY_INLINE uint16_t AddNode(const uint16_t leftIdx, const uint16_t rightIdx, const AABB& box)
 	{
-		const RenderParams* params = GetParams();
+		const RenderParams* __restrict__ params = GetParams();
 
 		params->BVH->m_LeftNodes[params->BVH->m_Count]	= leftIdx;
 		params->BVH->m_RightNodes[params->BVH->m_Count] = rightIdx;
@@ -59,7 +59,7 @@ namespace BVH
 		if (nodeIdx == UINT16_MAX)
 			return;
 
-		const RenderParams* params = GetParams();
+		const RenderParams* __restrict__ params = GetParams();
 
 		// Get the current node
 		const BVHSoA::BVHNode& node = params->BVH->m_Nodes[nodeIdx];
@@ -103,7 +103,7 @@ namespace BVH
 		// Return if node is invalid
 		if (nodeIdx == UINT16_MAX)
 			return;
-		const RenderParams* params = GetParams();
+		const RenderParams* __restrict__ params = GetParams();
 
 		// Get the current node
 		const BVHSoA::BVHNode& node = params->BVH->m_Nodes[nodeIdx];
@@ -142,7 +142,7 @@ namespace BVH
 
 	__device__ __host__ CPU_ONLY_INLINE uint16_t ReorderBVH()
 	{
-		const RenderParams* params = GetParams();
+		const RenderParams* __restrict__ params = GetParams();
 
 		// Temporary arrays to hold the reordered BVH
 		BVHSoA::BVHNode* tempNodes	= static_cast<BVHSoA::BVHNode*>(malloc(params->BVH->m_Count * sizeof(BVHSoA::BVHNode)));
@@ -189,8 +189,8 @@ namespace BVH
 
 	__device__ __host__ CPU_ONLY_INLINE uint16_t Build(uint16_t* indices, uint16_t start, uint16_t end)
 	{
-		const RenderParams* params	   = GetParams();
-		const uint16_t		objectSpan = end - start;
+		const RenderParams* __restrict__ params = GetParams();
+		const uint16_t objectSpan				= end - start;
 
 		// Compute bounding box for this node
 		AABB box;
@@ -326,7 +326,7 @@ namespace BVH
 
 	__device__ __host__ CPU_ONLY_INLINE bool Traverse(const Ray& ray, const float tmin, float tmax, HitRecord& bestHit)
 	{
-		const RenderParams* params = GetParams();
+		const RenderParams* __restrict__ params = GetParams();
 
 		// Use registers for stack instead of memory
 		uint16_t currentNode = params->BVH->m_Root;

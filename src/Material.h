@@ -46,7 +46,7 @@ namespace Mat
 
 	__device__ __host__ CPU_ONLY_INLINE void Add(const MaterialType type, const Vec3& albedo, const float fuzz = 0.0f, const float ior = 1.0f)
 	{
-		const RenderParams* params = GetParams();
+		const RenderParams* __restrict__ params = GetParams();
 
 		params->Materials->Albedo[params->Materials->Count] = albedo;
 		params->Materials->Fuzz[params->Materials->Count]	= fuzz;
@@ -76,8 +76,8 @@ namespace Mat
 
 	__device__ __host__ CPU_ONLY_INLINE bool Scatter(Ray& ray, const HitRecord& rec, Vec3& attenuation, uint32_t& randSeed)
 	{
-		const RenderParams* params = GetParams();
-		const auto&			m	   = params->Materials;
+		const RenderParams* __restrict__ params = GetParams();
+		const auto& m							= params->Materials;
 
 		Vec3  albedo = m->Albedo[rec.PrimitiveIndex];
 		float fuzz	 = m->Fuzz[rec.PrimitiveIndex];

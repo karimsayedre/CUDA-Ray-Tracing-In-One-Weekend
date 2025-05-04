@@ -47,7 +47,7 @@ __global__ void CreateWorldKernel()
 
 __global__ void RenderKernel()
 {
-	const RenderParams* params = GetParams();
+	const RenderParams* __restrict__ params = GetParams();
 
 	const float x = (float)(threadIdx.x + blockIdx.x * blockDim.x);
 	const float y = (float)(threadIdx.y + blockIdx.y * blockDim.y);
@@ -60,10 +60,8 @@ __global__ void RenderKernel()
 
 	for (uint16_t s = 0; s < params->m_SamplesPerPixel; s++)
 	{
-		const float2 uv = float2 { (x + RandomFloat(seed)) * params->ResolutionInfo.x, 1.0f - (y + RandomFloat(seed)) * params->ResolutionInfo.y };
-
-		const Ray ray = reinterpret_cast<const Camera&>(params->Camera).GetRay(uv);
-
+		const float2 uv	 = float2 { (x + RandomFloat(seed)) * params->ResolutionInfo.x, 1.0f - (y + RandomFloat(seed)) * params->ResolutionInfo.y };
+		const Ray	 ray = reinterpret_cast<const Camera&>(params->Camera).GetRay(uv);
 		pixelColor += RayColor(ray, seed);
 	}
 
@@ -103,13 +101,25 @@ __host__ Renderer<Mode>::Renderer(const sf::Vector2u dims, const uint32_t sample
 
 	if constexpr (Mode == ExecutionMode::GPU)
 	{
+		CHECK_CUDA_ERRORS(cudaEventRecord(m_StartEvent));
 		CreateWorldKernel<<<1, 1>>>();
 		CHECK_CUDA_ERRORS(cudaGetLastError());
+		CHECK_CUDA_ERRORS(cudaEventRecord(m_EndEvent));
+
+		CHECK_CUDA_ERRORS(cudaEventSynchronize(m_EndEvent));
+
+		float elapsedTimeMs;
+		CHECK_CUDA_ERRORS(cudaEventElapsedTime(&elapsedTimeMs, m_StartEvent, m_EndEvent));
+		printf("CUDA BVH creation took: %.3f ms on GPU\n", elapsedTimeMs);
+
 		CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 	}
 	else
 	{
+		auto start = std::chrono::high_resolution_clock::now();
 		CreateWorld();
+		auto end = std::chrono::high_resolution_clock::now();
+		printf("CPU BVH creation took %.3f ms on CPU\n", std::chrono::duration<float, std::milli>(end - start).count());
 	}
 
 	ResizeImage(dims, 0);

@@ -9,8 +9,8 @@
 
 __device__ __host__ CPU_ONLY_INLINE void CreateWorld()
 {
-	uint32_t			seed   = PcgHash(134537);
-	const RenderParams* params = GetParams();
+	const RenderParams* __restrict__ params = GetParams();
+	uint32_t seed							= PcgHash(134537);
 
 	// Ground sphere:
 	Mat::Add(Mat::MaterialType::Lambert, Vec3(0.5f, 0.5f, 0.5f), 0.0f, 1.0f);
@@ -99,7 +99,7 @@ __device__ __host__ CPU_ONLY_INLINE void CreateWorld()
 
 __device__ __host__ CPU_ONLY_INLINE Vec3 RayColor(const Ray& ray, uint32_t& randSeed)
 {
-	const RenderParams* params = GetParams();
+	const RenderParams* __restrict__ params = GetParams();
 
 	Ray	 origRay = ray;
 	Vec3 curAttenuation(1.0f);

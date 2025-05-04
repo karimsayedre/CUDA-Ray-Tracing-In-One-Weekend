@@ -48,7 +48,7 @@ struct MemPolicy
 		}
 		else
 		{
-			static_assert(M == ExecutionMode::CPU || M == ExecutionMode::GPU, "Unsupported ExecutionMode");
+			static_assert(false, "Unsupported ExecutionMode");
 			return nullptr;
 		}
 	}
