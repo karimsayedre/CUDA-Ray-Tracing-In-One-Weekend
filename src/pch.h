@@ -32,6 +32,5 @@
 #	define fmaf			glm::fma
 #endif
 
-using Vec2				  = glm::vec<2, float, glm::aligned_mediump>;
-using Vec3				  = glm::vec<3, float, glm::aligned_mediump>;
-static constexpr float PI = std::numbers::pi_v<float>;
+using Vec2 = glm::vec<2, float, glm::aligned_mediump>;
+using Vec3 = glm::vec<3, float, glm::aligned_mediump>;

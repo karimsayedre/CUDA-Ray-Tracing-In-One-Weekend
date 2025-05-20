@@ -10,7 +10,7 @@ class Ray
 	{
 	}
 
-		[[nodiscard]] __device__ __host__ Ray(const float3& origin, const float3& direction) noexcept
+	[[nodiscard]] __device__ __host__ Ray(const float3& origin, const float3& direction) noexcept
 		: Origin(origin.x, origin.y, origin.z), Direction(direction.x, direction.y, direction.z)
 	{
 	}

@@ -34,7 +34,7 @@ template<ExecutionMode M>
 struct MemPolicy
 {
 	template<typename T>
-	static T* Alloc(const size_t count) // count multiplied by size of primitive
+	[[nodiscard]] static T* Alloc(const size_t count) // count multiplied by size of primitive
 	{
 		if constexpr (M == ExecutionMode::CPU)
 		{

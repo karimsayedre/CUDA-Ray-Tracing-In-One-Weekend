@@ -56,7 +56,7 @@ class Camera
 		m_LowerLeftCorner = m_Origin - m_Horizontal / 2.0f - m_Vertical / 2.0f - w;
 	}
 
-	__device__ __host__ [[nodiscard]] Ray GetRay(const float2 uv) const
+	[[nodiscard]] __device__ __host__ Ray GetRay(const float2 uv) const
 	{
 		return { m_Origin, m_LowerLeftCorner + uv.x * m_Horizontal + uv.y * m_Vertical - m_Origin };
 	}

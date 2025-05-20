@@ -1,7 +1,7 @@
 #pragma once
 #include "pch.h"
 
-__device__ __host__ CPU_ONLY_INLINE float Schlick(float cosTheta, float refIdx)
+[[nodiscard]] __device__ __host__ CPU_ONLY_INLINE float Schlick(float cosTheta, float refIdx)
 {
 	float r0   = (1.0f - refIdx) / (1.0f + refIdx);
 	r0		   = r0 * r0;
@@ -11,7 +11,7 @@ __device__ __host__ CPU_ONLY_INLINE float Schlick(float cosTheta, float refIdx)
 }
 
 // Branchless refract candidate: sqrtk is zero if total internal reflection
-__device__ __host__ CPU_ONLY_INLINE Vec3 RefractBranchless(const Vec3& v, const Vec3& n, float etaiOverEtat)
+[[nodiscard]] __device__ __host__ CPU_ONLY_INLINE Vec3 RefractBranchless(const Vec3& v, const Vec3& n, float etaiOverEtat)
 {
 	float dt	= dot(v, n);
 	float k		= 1.0f - etaiOverEtat * etaiOverEtat * (1.0f - dt * dt);

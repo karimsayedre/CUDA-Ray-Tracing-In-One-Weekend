@@ -46,7 +46,7 @@ struct RenderParams
 extern RenderParams				 h_Params; // unified host copy -> CPURender.cpp
 __constant__ inline RenderParams d_Params; // GPU constant memory copy
 
-__host__ __device__ inline RenderParams* GetParams()
+[[nodiscard]] __host__ __device__ inline RenderParams* GetParams()
 {
 #if defined(__CUDA_ARCH__)
 	// device‐side compilation only: return the constant symbol

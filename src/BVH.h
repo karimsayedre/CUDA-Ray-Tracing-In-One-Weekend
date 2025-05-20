@@ -20,7 +20,7 @@ namespace BVH
 	};
 
 	template<ExecutionMode Mode>
-	__host__ inline BVHSoA* Init(const uint32_t capacity)
+	[[nodiscard]] __host__ inline BVHSoA* Init(const uint32_t capacity)
 	{
 		BVHSoA h_BVH;
 		h_BVH.m_Bounds = MemPolicy<Mode>::template Alloc<AABB>(capacity);
@@ -36,7 +36,7 @@ namespace BVH
 		return d_BVH;
 	}
 
-	__device__ __host__ CPU_ONLY_INLINE uint32_t AddNode(const uint32_t leftIdx, const uint32_t rightIdx, const AABB& box)
+	[[nodiscard]] __device__ __host__ CPU_ONLY_INLINE uint32_t AddNode(const uint32_t leftIdx, const uint32_t rightIdx, const AABB& box)
 	{
 		const RenderParams* __restrict__ params = GetParams();
 
@@ -184,7 +184,7 @@ namespace BVH
 	}
 #endif
 
-	__device__ __host__ CPU_ONLY_INLINE uint32_t Build(uint32_t* indices, uint32_t start, uint32_t end)
+	[[nodiscard]] __device__ __host__ CPU_ONLY_INLINE uint32_t Build(uint32_t* indices, uint32_t start, uint32_t end)
 	{
 		const RenderParams* __restrict__ params = GetParams();
 		const uint32_t objectSpan				= end - start;
@@ -321,7 +321,7 @@ namespace BVH
 		return AddNode(leftIdx, rightIdx, combined);
 	}
 
-	__device__ __host__ CPU_ONLY_INLINE bool Traverse(const Ray& ray, const float tmin, float tmax, HitRecord& bestHit)
+	[[nodiscard]] __device__ __host__ CPU_ONLY_INLINE bool Traverse(const Ray& ray, const float tmin, float tmax, HitRecord& bestHit)
 	{
 		const RenderParams* __restrict__ params = GetParams();
 
@@ -408,7 +408,6 @@ namespace BVH
 				return true;
 			};
 
-			// replace your two big blocks with:
 			const bool hitLeft	= slabTest(params->BVH->m_Bounds[node.Left], true);
 			const bool hitRight = slabTest(params->BVH->m_Bounds[node.Right], false);
 #endif

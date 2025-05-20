@@ -11,7 +11,7 @@ class Log
 
 	static void ShutDown();
 
-	inline static std::shared_ptr<spdlog::logger>& GetCoreLogger()
+	[[nodiscard]] inline static std::shared_ptr<spdlog::logger>& GetCoreLogger()
 	{
 		return s_CoreLogger;
 	}

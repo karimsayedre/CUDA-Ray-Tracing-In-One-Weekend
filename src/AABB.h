@@ -20,7 +20,7 @@ struct __align__(32) AABB
 	{
 	}
 
-	__device__ __host__ float SurfaceArea() const
+	[[nodiscard]] __device__ __host__ float SurfaceArea() const
 	{
 		const float dx = Max.x - Min.x;
 		const float dy = Max.y - Min.y;
@@ -28,7 +28,7 @@ struct __align__(32) AABB
 		return 2.0f * (dx * dy + dy * dz + dz * dx);
 	}
 
-	__device__ __host__ [[nodiscard]] Vec3 Center() const
+	[[nodiscard]] __device__ __host__ Vec3 Center() const
 	{
 		return (Min + Max) * 0.5f;
 	}

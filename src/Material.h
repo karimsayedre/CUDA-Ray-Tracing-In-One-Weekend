@@ -26,7 +26,7 @@ namespace Mat
 	};
 
 	template<ExecutionMode Mode>
-	__host__ inline Materials* Init(const uint32_t capacity)
+	[[nodiscard]] __host__ inline Materials* Init(const uint32_t capacity)
 	{
 		Materials h_materials;
 		h_materials.Albedo = MemPolicy<Mode>::template Alloc<Vec3>(capacity);
@@ -74,7 +74,7 @@ namespace Mat
 		params->Materials->Count++;
 	}
 
-	__device__ __host__ CPU_ONLY_INLINE bool Scatter(Ray& ray, const HitRecord& rec, Vec3& attenuation, uint32_t& randSeed)
+	[[nodiscard]] __device__ __host__ CPU_ONLY_INLINE bool Scatter(Ray& ray, const HitRecord& rec, Vec3& attenuation, uint32_t& randSeed)
 	{
 		const RenderParams* __restrict__ params = GetParams();
 		const auto& m							= params->Materials;

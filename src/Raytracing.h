@@ -97,7 +97,7 @@ __device__ __host__ CPU_ONLY_INLINE void CreateWorld()
 #endif
 }
 
-__device__ __host__ CPU_ONLY_INLINE Vec3 RayColor(const Ray& ray, uint32_t& randSeed)
+[[nodiscard]] __device__ __host__ CPU_ONLY_INLINE Vec3 RayColor(const Ray& ray, uint32_t& randSeed)
 {
 	const RenderParams* __restrict__ params = GetParams();
 
