@@ -7,7 +7,7 @@
 	r0		   = r0 * r0;
 	float inv  = 1.0f - cosTheta;
 	float inv5 = inv * inv * inv * inv * inv;
-	return fmaf(1.0f - r0, inv5, r0);
+	return std::fmaf(1.0f - r0, inv5, r0);
 }
 
 // Branchless refract candidate: sqrtk is zero if total internal reflection
@@ -15,6 +15,6 @@
 {
 	float dt	= dot(v, n);
 	float k		= 1.0f - etaiOverEtat * etaiOverEtat * (1.0f - dt * dt);
-	float sqrtk = sqrtf(fmaxf(k, 0.0f));
+	float sqrtk = std::sqrtf(std::fmaxf(k, 0.0f));
 	return etaiOverEtat * (v - n * dt) - n * sqrtk;
 }

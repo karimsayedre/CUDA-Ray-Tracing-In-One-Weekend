@@ -5,14 +5,13 @@
 class Camera
 {
   public:
-	__device__ __host__ Camera(const Vec3& lookFrom, const Vec3& lookAt, const Vec3& up, const float vFov, float width, float height)
+	__device__ __host__ Camera(const Vec3& lookFrom, const Vec3& lookAt, const Vec3& up, const float vFov, float aspectRatio)
 		: m_LookAt(lookAt), m_CurrentOffset(lookFrom.x), m_OriginalOffset(lookFrom.x)
 	{
 		const float theta		   = vFov * std::numbers::pi_v<float> / 180.0f;
 		const float h			   = glm::tan(theta / 2.0f);
 		const float viewportHeight = 2.0f * h;
 
-		float		aspectRatio	  = width / height;
 		const float viewportWidth = aspectRatio * viewportHeight;
 
 		const Vec3 w = glm::normalize(lookFrom - m_LookAt);

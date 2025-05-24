@@ -1,5 +1,7 @@
 #include "pch.h"
 #include <chrono>
+#include <GL/gl.h>
+
 #include "BVH.h"
 #include "Cuda.h"
 #include "HittableList.h"
@@ -11,6 +13,7 @@
 #include "Renderer.h"
 #include "ThreadPool.h"
 #include "SFML/Graphics/Image.hpp"
+
 // Explicit instantiations
 template class Renderer<ExecutionMode::GPU>;
 template class Renderer<ExecutionMode::CPU>;
@@ -79,7 +82,7 @@ __global__ void RenderKernel()
 template<ExecutionMode Mode>
 __host__ Renderer<Mode>::Renderer(const sf::Vector2u dims, const uint32_t samplesPerPixel, const uint32_t maxDepth, const float colorMul)
 	: m_SamplesPerPixel(samplesPerPixel), m_MaxDepth(maxDepth), m_ColorMul(colorMul),
-	  m_Camera(Vec3(13.0f, 2.0f, 3.0f), Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), 20.0f, static_cast<float>(dims.x), static_cast<float>(dims.y))
+	  m_Camera(Vec3(13.0f, 2.0f, 3.0f), Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), 20.0f, static_cast<float>(dims.x) / static_cast<float>(dims.y))
 {
 	if constexpr (Mode == ExecutionMode::GPU)
 	{
@@ -129,7 +132,7 @@ __host__ Renderer<Mode>::Renderer(const sf::Vector2u dims, const uint32_t sample
 }
 
 template<ExecutionMode Mode>
-void Renderer<Mode>::ResizeImage(const sf::Vector2u dims, cudaSurfaceObject_t surface)
+__host__ void Renderer<Mode>::ResizeImage(const sf::Vector2u dims, cudaSurfaceObject_t surface)
 {
 	if (m_Dims == dims)
 		return;
@@ -168,7 +171,7 @@ void Renderer<Mode>::ResizeImage(const sf::Vector2u dims, cudaSurfaceObject_t su
 
 template<>
 template<>
-std::chrono::duration<float, std::milli> Renderer<ExecutionMode::GPU>::Render(const sf::Vector2u& size, cudaSurfaceObject_t& surface, bool moveCamera)
+__host__ std::chrono::duration<float, std::milli> Renderer<ExecutionMode::GPU>::Render(const sf::Vector2u& size, cudaSurfaceObject_t& surface, const bool moveCamera)
 {
 	while (m_SubmittedCount - m_CompletedCount >= kFramesInFlight)
 	{
@@ -213,7 +216,7 @@ std::chrono::duration<float, std::milli> Renderer<ExecutionMode::GPU>::Render(co
 }
 
 template<ExecutionMode Mode>
-void Renderer<Mode>::CopyDeviceData(const cudaSurfaceObject_t imageSurface) const
+__host__ void Renderer<Mode>::CopyDeviceData(const cudaSurfaceObject_t imageSurface) const
 {
 	RenderParams* h_Params		= GetParams();
 	h_Params->Image				= imageSurface;

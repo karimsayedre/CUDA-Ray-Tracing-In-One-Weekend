@@ -3,8 +3,6 @@
 #include <SFML/OpenGL.hpp>
 #include <cuda_gl_interop.h>
 
-#include "Renderer.h"
-
 struct CudaGLSurface
 {
 	cudaGraphicsResource* CudaRes;
@@ -13,8 +11,8 @@ struct CudaGLSurface
 	cudaArray_t			  Array;
 	bool				  IsMapped;
 
-	CudaGLSurface(GLuint _glTex)
-		: CudaRes(nullptr), GlTex(_glTex), SurfObj(0), Array(nullptr), IsMapped(false)
+	explicit CudaGLSurface(const GLuint glTex)
+		: CudaRes(nullptr), GlTex(glTex), SurfObj(0), Array(nullptr), IsMapped(false)
 	{
 		RegisterTexture();
 	}
@@ -28,7 +26,7 @@ struct CudaGLSurface
 
 	void RegisterTexture()
 	{
-		CHECK_CUDA_ERRORS(cudaGraphicsGLRegisterImage(&CudaRes, GlTex, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore));
+		CHECK_CUDA_ERRORS(cudaGraphicsGLRegisterImage(&CudaRes, GlTex, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsWriteDiscard));
 	}
 
 	void UnregisterSurface()

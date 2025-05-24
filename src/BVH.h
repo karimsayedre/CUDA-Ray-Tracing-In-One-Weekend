@@ -358,20 +358,20 @@ namespace BVH
 
 			// Check left child
 			const AABB& leftBounds = params->BVH->m_Bounds[node.Left];
-			float		tx0 = fmaf(invDir.x, leftBounds.Min.x, rayOriginMulNegInvDir.x), tx1 = fmaf(invDir.x, leftBounds.Max.x, rayOriginMulNegInvDir.x);
-			float		ty0 = fmaf(invDir.y, leftBounds.Min.y, rayOriginMulNegInvDir.y), ty1 = fmaf(invDir.y, leftBounds.Max.y, rayOriginMulNegInvDir.y);
-			float		tz0 = fmaf(invDir.z, leftBounds.Min.z, rayOriginMulNegInvDir.z), tz1 = fmaf(invDir.z, leftBounds.Max.z, rayOriginMulNegInvDir.z);
-			float		tEnterL = fmaxf(fmaxf(fminf(tx0, tx1), fminf(ty0, ty1)), fmaxf(fminf(tz0, tz1), tmin));
-			float		tExitL	= fminf(fminf(fmaxf(tx0, tx1), fmaxf(ty0, ty1)), fminf(fmaxf(tz0, tz1), tmax));
+			float		tx0 = std::fmaf(invDir.x, leftBounds.Min.x, rayOriginMulNegInvDir.x), tx1 = std::fmaf(invDir.x, leftBounds.Max.x, rayOriginMulNegInvDir.x);
+			float		ty0 = std::fmaf(invDir.y, leftBounds.Min.y, rayOriginMulNegInvDir.y), ty1 = std::fmaf(invDir.y, leftBounds.Max.y, rayOriginMulNegInvDir.y);
+			float		tz0 = std::fmaf(invDir.z, leftBounds.Min.z, rayOriginMulNegInvDir.z), tz1 = std::fmaf(invDir.z, leftBounds.Max.z, rayOriginMulNegInvDir.z);
+			float		tEnterL = std::fmaxf(std::fmaxf(std::fminf(tx0, tx1), std::fminf(ty0, ty1)), std::fmaxf(std::fminf(tz0, tz1), tmin));
+			float		tExitL	= std::fminf(std::fminf(std::fmaxf(tx0, tx1), std::fmaxf(ty0, ty1)), std::fminf(std::fmaxf(tz0, tz1), tmax));
 			bool		hitLeft = tEnterL <= tExitL;
 
 			// Check right child
 			const AABB& rightBounds = params->BVH->m_Bounds[node.Right];
-			tx0 = fmaf(invDir.x, rightBounds.Min.x, rayOriginMulNegInvDir.x), tx1 = fmaf(invDir.x, rightBounds.Max.x, rayOriginMulNegInvDir.x);
-			ty0 = fmaf(invDir.y, rightBounds.Min.y, rayOriginMulNegInvDir.y), ty1 = fmaf(invDir.y, rightBounds.Max.y, rayOriginMulNegInvDir.y);
-			tz0 = fmaf(invDir.z, rightBounds.Min.z, rayOriginMulNegInvDir.z), tz1 = fmaf(invDir.z, rightBounds.Max.z, rayOriginMulNegInvDir.z);
-			const float tEnterR	 = fmaxf(fmaxf(fminf(tx0, tx1), fminf(ty0, ty1)), fmaxf(fminf(tz0, tz1), tmin));
-			const float tExitR	 = fminf(fminf(fmaxf(tx0, tx1), fmaxf(ty0, ty1)), fminf(fmaxf(tz0, tz1), tmax));
+			tx0 = std::fmaf(invDir.x, rightBounds.Min.x, rayOriginMulNegInvDir.x), tx1 = std::fmaf(invDir.x, rightBounds.Max.x, rayOriginMulNegInvDir.x);
+			ty0 = std::fmaf(invDir.y, rightBounds.Min.y, rayOriginMulNegInvDir.y), ty1 = std::fmaf(invDir.y, rightBounds.Max.y, rayOriginMulNegInvDir.y);
+			tz0 = std::fmaf(invDir.z, rightBounds.Min.z, rayOriginMulNegInvDir.z), tz1 = std::fmaf(invDir.z, rightBounds.Max.z, rayOriginMulNegInvDir.z);
+			const float tEnterR	 = std::fmaxf(std::fmaxf(std::fminf(tx0, tx1), std::fminf(ty0, ty1)), std::fmaxf(std::fminf(tz0, tz1), tmin));
+			const float tExitR	 = std::fminf(std::fminf(std::fmaxf(tx0, tx1), std::fmaxf(ty0, ty1)), std::fminf(std::fmaxf(tz0, tz1), tmax));
 			bool		hitRight = tEnterR <= tExitR;
 
 			uint32_t closerChild  = tEnterL > tEnterR ? node.Right : node.Left;
@@ -382,22 +382,22 @@ namespace BVH
 			uint32_t fartherChild;
 			auto	 slabTest = [&](const AABB& b, const bool first) -> bool
 			{
-				float t0	 = fmaf(invDir.x, b.Min.x, rayOriginMulNegInvDir.x);
-				float t1	 = fmaf(invDir.x, b.Max.x, rayOriginMulNegInvDir.x);
+				float t0	 = std::fma(invDir.x, b.Min.x, rayOriginMulNegInvDir.x);
+				float t1	 = std::fma(invDir.x, b.Max.x, rayOriginMulNegInvDir.x);
 				float tEnter = glm::max(glm::min(t0, t1), tmin);
 				float tExit	 = glm::min(glm::max(t0, t1), tmax);
 				if (tExit < tEnter)
 					return false;
 
-				t0	   = fmaf(invDir.y, b.Min.y, rayOriginMulNegInvDir.y);
-				t1	   = fmaf(invDir.y, b.Max.y, rayOriginMulNegInvDir.y);
+				t0	   = std::fma(invDir.y, b.Min.y, rayOriginMulNegInvDir.y);
+				t1	   = std::fma(invDir.y, b.Max.y, rayOriginMulNegInvDir.y);
 				tEnter = glm::max(glm::min(t0, t1), tEnter);
 				tExit  = glm::min(glm::max(t0, t1), tExit);
 				if (tExit < tEnter)
 					return false;
 
-				t0	   = fmaf(invDir.z, b.Min.z, rayOriginMulNegInvDir.z);
-				t1	   = fmaf(invDir.z, b.Max.z, rayOriginMulNegInvDir.z);
+				t0	   = std::fma(invDir.z, b.Min.z, rayOriginMulNegInvDir.z);
+				t1	   = std::fma(invDir.z, b.Max.z, rayOriginMulNegInvDir.z);
 				tEnter = glm::max(glm::min(t0, t1), tEnter);
 				tExit  = glm::min(glm::max(t0, t1), tExit);
 				if (tExit < tEnter)
@@ -413,15 +413,11 @@ namespace BVH
 #endif
 
 			// Resolve everything immediately
-			uint32_t next;
-			bool	 doTraverseNext = false;
-
 			if (hitLeft & hitRight)
 			{
 				// Resolve early which side is first
-				currentNode	   = closerChild;
-				next		   = fartherChild;
-				doTraverseNext = true;
+				currentNode			  = closerChild;
+				stackData[stackPtr++] = fartherChild;
 			}
 			else if (hitLeft ^ hitRight)
 			{
@@ -432,9 +428,6 @@ namespace BVH
 				currentNode = stackData[--stackPtr];
 				continue;
 			}
-
-			if (doTraverseNext)
-				stackData[stackPtr++] = next;
 		}
 
 		return hitAnything;

@@ -117,7 +117,7 @@ __device__ __host__ CPU_ONLY_INLINE void CreateWorld()
 
 		// if (i > 3)
 		{
-			const float rrProb = fmaxf(curAttenuation.x, fmaxf(curAttenuation.y, curAttenuation.z));
+			const float rrProb = std::fmaxf(curAttenuation.x, std::fmaxf(curAttenuation.y, curAttenuation.z));
 
 			// Early termination with zero - saves registers by avoiding division
 			if (RandomFloat(randSeed) > rrProb)

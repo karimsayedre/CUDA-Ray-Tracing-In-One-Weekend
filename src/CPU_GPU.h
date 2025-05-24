@@ -1,24 +1,6 @@
 #pragma once
 #include "pch.h"
 
-#define CHECK_CUDA
-#ifdef CHECK_CUDA
-__host__ void CheckCuda(cudaError_t result, char const* const func, const char* const file, int const line);
-#	define CHECK_CUDA_ERRORS(val) CheckCuda((val), #val, __FILE__, __LINE__)
-#else
-#	define CHECK_CUDA_ERRORS(val) (val)
-#endif
-
-#define CHECK_BOOL(val)     \
-	do                      \
-	{                       \
-		if (!(val))         \
-		{                   \
-			__debugbreak(); \
-			assert(false);  \
-		}                   \
-	} while (false)
-
 namespace sf
 {
 	class Image;
