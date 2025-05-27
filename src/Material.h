@@ -70,45 +70,45 @@ namespace Mat
 	{
 		const RenderParams* params = GetParams();
 
-		Vec4 albedoIOR	= params->Materials->AlbedoIOR[rec.PrimitiveIndex];
-		Vec4 weightFuzz = params->Materials->FlagsFuzz[rec.PrimitiveIndex];
+		const Vec4& albedoIor	  = params->Materials->AlbedoIOR[rec.PrimitiveIndex];
+		const auto& [flags, fuzz] = params->Materials->FlagsFuzz[rec.PrimitiveIndex];
 
 		// normalize weights
-		float sumW	= weightFuzz.XYZ.x + weightFuzz.XYZ.y + weightFuzz.XYZ.z + 1e-6f;
-		Vec3  normW = weightFuzz.XYZ / sumW;
+		const float sumW  = flags.x + flags.y + flags.z + 1e-6f;
+		const Vec3	normW = flags / sumW;
 
 		const Vec3 rand3 = RandomVec3(randSeed);
 
 		// Precompute directions
 		const Vec3& unitDir	   = ray.Direction; // already normalized
-		Vec3		lambertDir = glm::normalize(rec.Normal + rand3);
-		Vec3		metalRef   = reflect(unitDir, rec.Normal);
-		Vec3		metalDir   = glm::normalize(metalRef + weightFuzz.W * rand3);
+		const Vec3	lambertDir = glm::normalize(rec.Normal + rand3);
+		const Vec3	metalRef   = reflect(unitDir, rec.Normal);
+		const Vec3	metalDir   = glm::normalize(metalRef + fuzz * rand3);
 
 		// Dielectric components using faceNormal
-		float frontFaceMask = float(dot(unitDir, rec.Normal) < 0.0f);
-		Vec3  faceNormal	= frontFaceMask * rec.Normal + (1.0f - frontFaceMask) * -rec.Normal;
-		float cosTheta		= std::fminf(dot(-unitDir, faceNormal), 1.0f);
-		float sinTheta		= std::sqrtf(std::fmaxf(0.0f, 1.0f - cosTheta * cosTheta));
-		float etaiOverEtat	= frontFaceMask * (1.0f / albedoIOR.W) + (1.0f - frontFaceMask) * albedoIOR.W;
-		float cannotRefract = float(etaiOverEtat * sinTheta > 1.0f);
-		float reflectProb	= cannotRefract + (1.0f - cannotRefract) * Schlick(cosTheta, albedoIOR.W);
-		float isReflect		= float(rand3.x < reflectProb);
+		const float frontFaceMask = dot(unitDir, rec.Normal) < 0.0f;
+		const Vec3	faceNormal	  = frontFaceMask * rec.Normal + (1.0f - frontFaceMask) * -rec.Normal;
+		const float cosTheta	  = std::fminf(dot(-unitDir, faceNormal), 1.0f);
+		const float sinTheta	  = std::sqrtf(std::fmaxf(0.0f, 1.0f - cosTheta * cosTheta));
+		const float etaiOverEtat  = frontFaceMask * (1.0f / albedoIor.W) + (1.0f - frontFaceMask) * albedoIor.W;
+		const float cannotRefract = etaiOverEtat * sinTheta > 1.0f;
+		const float reflectProb	  = cannotRefract + (1.0f - cannotRefract) * Schlick(cosTheta, albedoIor.W);
+		const float isReflect	  = rand3.x < reflectProb;
 
-		Vec3 refracted = RefractBranchless(unitDir, faceNormal, etaiOverEtat);
-		Vec3 dielecDir = isReflect * reflect(unitDir, faceNormal) + (1.0f - isReflect) * refracted;
+		const Vec3 refracted = RefractBranchless(unitDir, faceNormal, etaiOverEtat);
+		const Vec3 dielecDir = isReflect * reflect(unitDir, faceNormal) + (1.0f - isReflect) * refracted;
 
 		// Composite direction and normalize
-		Vec3 dir = lambertDir * normW.x + metalDir * normW.y + dielecDir * normW.z;
-		ray		 = Ray(rec.Location, normalize(dir));
+		const Vec3 dir = lambertDir * normW.x + metalDir * normW.y + dielecDir * normW.z;
+		ray			   = Ray(rec.Location, normalize(dir));
 
 		// Branchless attenuation: lambert & metal albedo, dielectric = 1
-		Vec3 att = reinterpret_cast<Vec3&>(albedoIOR) * (normW.x + normW.y) + Vec3(1.0f) * normW.z;
+		const Vec3 att = reinterpret_cast<const Vec3&>(albedoIor) * (normW.x + normW.y) + Vec3(1.0f) * normW.z;
 		attenuation *= att * sumW;
 
 		// Early exit on no scatter
 		const float scatterDot = dot(dir, rec.Normal);
-		return (scatterDot > 0.0f) || (weightFuzz.XYZ.z > 0.0f);
+		return (scatterDot > 0.0f) || (flags.z > 0.0f);
 	}
 
 } // namespace Mat
