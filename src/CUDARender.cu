@@ -1,7 +1,5 @@
 #include "pch.h"
 #include <chrono>
-#include <GL/gl.h>
-
 #include "BVH.h"
 #include "Cuda.h"
 #include "HittableList.h"
@@ -9,7 +7,6 @@
 #include "Random.h"
 #include "CPU_GPU.h"
 #include "Raytracing.h"
-
 #include "Renderer.h"
 #include "ThreadPool.h"
 #include "SFML/Graphics/Image.hpp"
@@ -48,6 +45,31 @@ __global__ void CreateWorldKernel()
 	}
 }
 
+template<>
+void Renderer<ExecutionMode::GPU>::InitWorld()
+{
+	CHECK_CUDA_ERRORS(cudaEventRecord(m_Frames[0].Start));
+	CreateWorldKernel<<<1, 1>>>();
+	CHECK_CUDA_ERRORS(cudaGetLastError());
+	CHECK_CUDA_ERRORS(cudaEventRecord(m_Frames[0].End));
+
+	CHECK_CUDA_ERRORS(cudaEventSynchronize(m_Frames[0].End));
+
+	float elapsedTimeMs;
+	CHECK_CUDA_ERRORS(cudaEventElapsedTime(&elapsedTimeMs, m_Frames[0].Start, m_Frames[0].End));
+	printf("BVH creation took: %.3f ms on GPU\n", elapsedTimeMs);
+
+	CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
+}
+
+template<ExecutionMode Mode>
+void Renderer<Mode>::AllocateRaytracingData(int numHitables)
+{
+	dp_List		 = Hitables::Init<Mode>(numHitables);
+	dp_Materials = Mat::Init<Mode>(numHitables);
+	dp_BVH		 = BVH::Init<Mode>(numHitables * 2 - 1);
+}
+
 __global__ void RenderKernel()
 {
 	const RenderParams* __restrict__ params = GetParams();
@@ -80,59 +102,7 @@ __global__ void RenderKernel()
 }
 
 template<ExecutionMode Mode>
-__host__ Renderer<Mode>::Renderer(const sf::Vector2u dims, const uint32_t samplesPerPixel, const uint32_t maxDepth, const float colorMul)
-	: m_SamplesPerPixel(samplesPerPixel), m_MaxDepth(maxDepth), m_ColorMul(colorMul),
-	  m_Camera(Vec3(13.0f, 2.0f, 3.0f), Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), 20.0f, static_cast<float>(dims.x) / static_cast<float>(dims.y))
-{
-	if constexpr (Mode == ExecutionMode::GPU)
-	{
-		CHECK_CUDA_ERRORS(cudaDeviceSetLimit(cudaLimitStackSize, 16000));
-		CHECK_CUDA_ERRORS(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
-
-		//  Create CUDA events for timing
-		for (auto& f : m_Frames)
-		{
-			CHECK_CUDA_ERRORS(cudaEventCreate(&f.Start));
-			CHECK_CUDA_ERRORS(cudaEventCreate(&f.End));
-		}
-	}
-
-	constexpr int numHitables = 22 * 22 + 1 + 3;
-
-	dp_List		 = Hitables::Init<Mode>(numHitables);
-	dp_Materials = Mat::Init<Mode>(numHitables);
-	dp_BVH		 = BVH::Init<Mode>(numHitables * 2 - 1);
-
-	CopyDeviceData(0);
-
-	if constexpr (Mode == ExecutionMode::GPU)
-	{
-		CHECK_CUDA_ERRORS(cudaEventRecord(m_Frames[0].Start));
-		CreateWorldKernel<<<1, 1>>>();
-		CHECK_CUDA_ERRORS(cudaGetLastError());
-		CHECK_CUDA_ERRORS(cudaEventRecord(m_Frames[0].End));
-
-		CHECK_CUDA_ERRORS(cudaEventSynchronize(m_Frames[0].End));
-
-		float elapsedTimeMs;
-		CHECK_CUDA_ERRORS(cudaEventElapsedTime(&elapsedTimeMs, m_Frames[0].Start, m_Frames[0].End));
-		printf("CUDA BVH creation took: %.3f ms on GPU\n", elapsedTimeMs);
-
-		CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
-	}
-	else
-	{
-		auto start = std::chrono::high_resolution_clock::now();
-		CreateWorld();
-		auto end = std::chrono::high_resolution_clock::now();
-		printf("CPU BVH creation took %.3f ms on CPU\n", std::chrono::duration<float, std::milli>(end - start).count());
-	}
-
-	ResizeImage(dims, 0);
-}
-
-template<ExecutionMode Mode>
-__host__ void Renderer<Mode>::ResizeImage(const sf::Vector2u dims, cudaSurfaceObject_t surface)
+__host__ void Renderer<Mode>::ResizeImage(const sf::Vector2u dims, const cudaSurfaceObject_t surface)
 {
 	if (m_Dims == dims)
 		return;
@@ -248,13 +218,8 @@ __host__ Renderer<Mode>::~Renderer()
 
 		CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 	}
-
-	if (dp_RandSeeds)
-		MemPolicy<Mode>::Free(dp_RandSeeds);
-	if (dp_List)
-		MemPolicy<Mode>::Free(dp_List);
-	if (dp_BVH)
-		MemPolicy<Mode>::Free(dp_BVH);
-	if (dp_Materials)
-		MemPolicy<Mode>::Free(dp_Materials);
+	MemPolicy<Mode>::Free(dp_RandSeeds);
+	BVH::Destroy<Mode>(dp_BVH);
+	Hitables::Destroy<Mode>(dp_List);
+	Mat::Destroy<Mode>(dp_Materials);
 }

@@ -17,9 +17,9 @@ __device__ __host__ CPU_ONLY_INLINE void CreateWorld()
 	Hitables::Add(Vec3(0, -1000.0f, -1), 1000.0f);
 
 	// For each grid position:
-	for (int a = -11; a < 11; a++)
+	for (float a = -11; a < 11; a++)
 	{
-		for (int b = -11; b < 11; b++)
+		for (float b = -11; b < 11; b++)
 		{
 			// NOTE: explicitly having random variables to prevent different compilers from
 			// having un-sequenced side effects so CPU and GPU versions are identical
@@ -34,10 +34,10 @@ __device__ __host__ CPU_ONLY_INLINE void CreateWorld()
 			if (chooseMat < 0.8f)
 			{
 				// Lambert: draw three components, square each
-				const float r = RandomFloat(seed);
-				const float g = RandomFloat(seed);
-				const float b = RandomFloat(seed);
-				Vec3		albedo(r * r, g * g, b * b);
+				const float red	  = RandomFloat(seed);
+				const float green = RandomFloat(seed);
+				const float blue  = RandomFloat(seed);
+				Vec3		albedo(red * red, green * green, blue * blue);
 				Mat::Add(Mat::MaterialType::Lambert, albedo, 0.0f, 1.0f);
 			}
 			else if (chooseMat < 0.95f)

@@ -1,6 +1,5 @@
 ﻿#pragma once
 
-#include "AABB.h"
 #include "CPU_GPU.h"
 #include "Renderer.h"
 
@@ -14,6 +13,7 @@ namespace Hitables
 		AABB* __restrict__ AABBs;
 		uint32_t Count;
 	};
+
 	template<ExecutionMode Mode>
 	[[nodiscard]] __host__ inline PrimitiveList* Init(const uint32_t capacity)
 	{
@@ -31,6 +31,26 @@ namespace Hitables
 		return d_HittableList;
 	}
 
+	template<ExecutionMode Mode>
+	__host__ inline void Destroy(PrimitiveList* list)
+	{
+		if constexpr (Mode == ExecutionMode::GPU)
+		{
+			PrimitiveList hostList;
+			CHECK_CUDA_ERRORS(cudaMemcpy(&hostList, list, sizeof(PrimitiveList), cudaMemcpyDeviceToHost));
+
+			MemPolicy<Mode>::Free(hostList.CentersAndRadius);
+			MemPolicy<Mode>::Free(hostList.AABBs);
+			MemPolicy<Mode>::Free(list);
+		}
+		else
+		{
+			MemPolicy<Mode>::Free(list->CentersAndRadius);
+			MemPolicy<Mode>::Free(list->AABBs);
+			MemPolicy<Mode>::Free(list);
+		}
+	}
+
 	__device__ __host__ CPU_ONLY_INLINE void Add(const Vec3& position, const float radius)
 	{
 		const RenderParams* __restrict__ params = GetParams();
@@ -42,13 +62,13 @@ namespace Hitables
 
 	[[nodiscard]] __device__ __host__ CPU_ONLY_INLINE bool IntersectPrimitive(const Ray& ray, const float tMin, float& tMax, HitRecord& record, const uint32_t sphereIndex)
 	{
-		const RenderParams* params			= GetParams();
-		const Vec4			centerAndRadius = params->List->CentersAndRadius[sphereIndex];
-		const Vec3			oc				= ray.Origin - centerAndRadius.XYZ;
-		const float			a				= glm::dot(ray.Direction, ray.Direction);
-		const float			b				= glm::dot(oc, ray.Direction);
-		const float			c				= glm::dot(oc, oc) - centerAndRadius.W * centerAndRadius.W;
-		const float			discriminant	= b * b - a * c;
+		const RenderParams* params	= GetParams();
+		const auto [center, radius] = params->List->CentersAndRadius[sphereIndex];
+		const Vec3	oc				= ray.Origin - center;
+		const float a				= glm::dot(ray.Direction, ray.Direction);
+		const float b				= glm::dot(oc, ray.Direction);
+		const float c				= glm::dot(oc, oc) - radius * radius;
+		const float discriminant	= b * b - a * c;
 
 		if (discriminant <= 0.0f)
 			return false; // No intersection
@@ -65,8 +85,8 @@ namespace Hitables
 		// Compute intersection data
 		record.Location = ray.PointAtT(t);
 
-		const float invRadius = 1.0f / centerAndRadius.W;
-		const Vec3	negCenter = -params->List->CentersAndRadius[sphereIndex].XYZ;
+		const float invRadius = 1.0f / radius;
+		const Vec3	negCenter = -center;
 #ifdef __CUDA_ARCH__
 		record.Normal.x = std::fmaf(record.Location.x, invRadius, negCenter.x * invRadius);
 		record.Normal.y = std::fmaf(record.Location.y, invRadius, negCenter.y * invRadius);

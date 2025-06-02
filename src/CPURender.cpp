@@ -2,17 +2,23 @@
 #include <chrono>
 #include "BVH.h"
 #include "Cuda.h"
-#include "HittableList.h"
-#include "Material.h"
 #include "Random.h"
 #include "CPU_GPU.h"
 #include "Raytracing.h"
-
 #include "Renderer.h"
 #include "ThreadPool.h"
 #include "SFML/Graphics/Image.hpp"
 
 RenderParams h_Params; // unified host copy
+
+template<>
+void Renderer<ExecutionMode::CPU>::InitWorld()
+{
+	const auto start = std::chrono::high_resolution_clock::now();
+	CreateWorld();
+	const auto end = std::chrono::high_resolution_clock::now();
+	printf("BVH creation took %.3f ms on CPU\n", std::chrono::duration<float, std::milli>(end - start).count());
+}
 
 template<>
 template<>
@@ -31,6 +37,7 @@ __host__ std::chrono::duration<float, std::milli> Renderer<ExecutionMode::CPU>::
 
 	ThreadPool					   pool;
 	std::vector<std::future<void>> futures;
+	futures.reserve((size.x + tileWidth - 1) / tileWidth * (size.y + tileHeight - 1) / tileHeight);
 
 	// Enqueue one task per tile
 	for (uint32_t tileY = 0; tileY < size.y; tileY += tileHeight)

@@ -45,7 +45,7 @@ __host__ void CheckCuda(cudaError_t result, char const* const func, const char* 
 
 using Vec2 = glm::vec<2, float, glm::aligned_mediump>;
 using Vec3 = glm::vec<3, float, glm::aligned_mediump>;
-struct alignas(16) Vec4
+struct __align__(16) Vec4
 {
 	Vec3  XYZ;
 	float W;

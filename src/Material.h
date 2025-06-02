@@ -38,6 +38,26 @@ namespace Mat
 		return d_Materials;
 	}
 
+	template<ExecutionMode Mode>
+	__host__ inline void Destroy(Materials* materials)
+	{
+		if constexpr (Mode == ExecutionMode::GPU)
+		{
+			Materials hostMaterials;
+			CHECK_CUDA_ERRORS(cudaMemcpy(&hostMaterials, materials, sizeof(Materials), cudaMemcpyDeviceToHost));
+
+			MemPolicy<Mode>::Free(hostMaterials.AlbedoIOR);
+			MemPolicy<Mode>::Free(hostMaterials.FlagsFuzz);
+			MemPolicy<Mode>::Free(materials);
+		}
+		else
+		{
+			MemPolicy<Mode>::Free(materials->AlbedoIOR);
+			MemPolicy<Mode>::Free(materials->FlagsFuzz);
+			MemPolicy<Mode>::Free(materials);
+		}
+	}
+
 	__device__ __host__ CPU_ONLY_INLINE void Add(const MaterialType type, const Vec3& albedo, const float fuzz = 0.0f, const float ior = 1.0f)
 	{
 		const RenderParams* __restrict__ params					 = GetParams();

@@ -9,7 +9,7 @@
 #include "Renderer.h"
 
 #ifdef RTIOW_DEBUG_BVH
-__device__ __host__ CPU_ONLY_INLINE void DebugBVHNode(BVH::BVHSoA* soa, const uint32_t nodeIndex, const int depth = 0)
+__device__ __host__ CPU_ONLY_INLINE void DebugBVHNode(BVH::BVH* soa, const uint32_t nodeIndex, const int depth = 0)
 {
 	if (nodeIndex >= soa->m_Count)
 	{

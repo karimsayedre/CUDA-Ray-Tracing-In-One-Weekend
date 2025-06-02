@@ -5,7 +5,7 @@
 namespace BVH
 {
 	// Note: Could use this as a class with member functions but NVCC wouldn't show them in PTXAS info
-	struct alignas(32) BVHSoA
+	struct alignas(32) BVH
 	{
 		struct BVHNode
 		{
@@ -13,44 +13,63 @@ namespace BVH
 			uint32_t Right; // Index of right child (unused for leaves)
 		};
 		BVHNode* __restrict__ m_Nodes;
-
 		AABB* __restrict__ m_Bounds;
+
 		uint32_t m_Count = 0;
 		uint32_t m_Root	 = 0;
 	};
 
 	template<ExecutionMode Mode>
-	[[nodiscard]] __host__ inline BVHSoA* Init(const uint32_t capacity)
+	[[nodiscard]] __host__ inline BVH* Init(const uint32_t capacity)
 	{
-		BVHSoA h_BVH;
+		BVH h_BVH;
 		h_BVH.m_Bounds = MemPolicy<Mode>::template Alloc<AABB>(capacity);
-		h_BVH.m_Nodes  = MemPolicy<Mode>::template Alloc<BVHSoA::BVHNode>(capacity);
+		h_BVH.m_Nodes  = MemPolicy<Mode>::template Alloc<BVH::BVHNode>(capacity);
 
-		BVHSoA* d_BVH = MemPolicy<Mode>::template Alloc<BVHSoA>(1);
+		BVH* d_BVH = MemPolicy<Mode>::template Alloc<BVH>(1);
 
 		if constexpr (Mode == ExecutionMode::GPU)
-			CHECK_CUDA_ERRORS(cudaMemcpy(d_BVH, &h_BVH, sizeof(BVHSoA), cudaMemcpyHostToDevice));
+			CHECK_CUDA_ERRORS(cudaMemcpy(d_BVH, &h_BVH, sizeof(BVH), cudaMemcpyHostToDevice));
 		else
 			*d_BVH = h_BVH;
 
 		return d_BVH;
 	}
 
+	template<ExecutionMode Mode>
+	__host__ inline void Destroy(BVH* bvh)
+	{
+		if constexpr (Mode == ExecutionMode::GPU)
+		{
+			BVH hostBVH;
+			CHECK_CUDA_ERRORS(cudaMemcpy(&hostBVH, bvh, sizeof(BVH), cudaMemcpyDeviceToHost));
+
+			MemPolicy<Mode>::Free(hostBVH.m_Nodes);
+			MemPolicy<Mode>::Free(hostBVH.m_Bounds);
+			MemPolicy<Mode>::Free(bvh);
+		}
+		else
+		{
+			MemPolicy<Mode>::Free(bvh->m_Nodes);
+			MemPolicy<Mode>::Free(bvh->m_Bounds);
+			MemPolicy<Mode>::Free(bvh);
+		}
+	}
+
 	[[nodiscard]] __device__ __host__ CPU_ONLY_INLINE uint32_t AddNode(const uint32_t leftIdx, const uint32_t rightIdx, const AABB& box)
 	{
-		const RenderParams* __restrict__ params = GetParams();
-
-		params->BVH->m_Nodes[params->BVH->m_Count]	= { leftIdx, rightIdx };
+		const RenderParams* __restrict__ params		= GetParams();
+		params->BVH->m_Nodes[params->BVH->m_Count]	= { .Left = leftIdx, .Right = rightIdx };
 		params->BVH->m_Bounds[params->BVH->m_Count] = box;
 
 		return params->BVH->m_Count++;
 	}
 
 #ifdef RTIOW_BVH_VEB // can be more significant if we have a lot of nodes that they don't fit L1 cache
-	__device__ __host__ void ReorderVEB(uint32_t nodeIdx, uint32_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint32_t& newIndex, int currentDepth, int treeHeight);
+	__device__ __host__ void ReorderVEB(uint32_t nodeIdx, uint32_t* nodeMap, BVH::BVHNode* tempNodes, AABB* tempBounds, uint32_t& newIndex, int currentDepth, int treeHeight);
 
 	// Helper function for recursion with depth limits
-	__device__ __host__ CPU_ONLY_INLINE void ReorderVEBRecursive(uint32_t nodeIdx, uint32_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint32_t& newIndex, int currentDepth, int depthLimit, int treeHeight)
+	__device__ __host__ CPU_ONLY_INLINE void ReorderVEBRecursive(uint32_t nodeIdx, uint32_t* nodeMap, BVH::BVHNode* tempNodes, AABB* tempBounds, uint32_t& newIndex, int currentDepth, int depthLimit, int treeHeight)
 	{
 		// Return if node is invalid
 		if (nodeIdx == UINT32_MAX)
@@ -59,7 +78,7 @@ namespace BVH
 		const RenderParams* __restrict__ params = GetParams();
 
 		// Get the current node
-		const BVHSoA::BVHNode& node = params->BVH->m_Nodes[nodeIdx];
+		const BVH::BVHNode& node = params->BVH->m_Nodes[nodeIdx];
 
 		// For leaf nodes, just add them to the new array
 		if (node.Right == UINT32_MAX)
@@ -95,7 +114,7 @@ namespace BVH
 	}
 
 	// Recursive function to reorder the nodes in a van Emde Boas layout
-	__device__ __host__ CPU_ONLY_INLINE void ReorderVEB(uint32_t nodeIdx, uint32_t* nodeMap, BVHSoA::BVHNode* tempNodes, AABB* tempBounds, uint32_t& newIndex, int currentDepth, int treeHeight)
+	__device__ __host__ CPU_ONLY_INLINE void ReorderVEB(uint32_t nodeIdx, uint32_t* nodeMap, BVH::BVHNode* tempNodes, AABB* tempBounds, uint32_t& newIndex, int currentDepth, int treeHeight)
 	{
 		// Return if node is invalid
 		if (nodeIdx == UINT32_MAX)
@@ -103,7 +122,7 @@ namespace BVH
 		const RenderParams* __restrict__ params = GetParams();
 
 		// Get the current node
-		const BVHSoA::BVHNode& node = params->BVH->m_Nodes[nodeIdx];
+		const BVH::BVHNode& node = params->BVH->m_Nodes[nodeIdx];
 
 		// For leaf nodes, just add them to the new array
 		if (node.Right == UINT32_MAX)
@@ -142,8 +161,8 @@ namespace BVH
 		const RenderParams* __restrict__ params = GetParams();
 
 		// Temporary arrays to hold the reordered BVH
-		BVHSoA::BVHNode* tempNodes	= static_cast<BVHSoA::BVHNode*>(malloc(params->BVH->m_Count * sizeof(BVHSoA::BVHNode)));
-		AABB*			 tempBounds = static_cast<AABB*>(malloc(params->BVH->m_Count * sizeof(AABB)));
+		BVH::BVHNode* tempNodes	 = static_cast<BVH::BVHNode*>(malloc(params->BVH->m_Count * sizeof(BVH::BVHNode)));
+		AABB*		  tempBounds = static_cast<AABB*>(malloc(params->BVH->m_Count * sizeof(AABB)));
 
 		// Create a map to store the old -> new node indices mapping
 		uint32_t* nodeMap = static_cast<uint32_t*>(malloc(params->BVH->m_Count * sizeof(uint32_t)));
@@ -171,7 +190,7 @@ namespace BVH
 		}
 
 		// Copy back the reordered data
-		memcpy(params->BVH->m_Nodes, tempNodes, params->BVH->m_Count * sizeof(BVHSoA::BVHNode));
+		memcpy(params->BVH->m_Nodes, tempNodes, params->BVH->m_Count * sizeof(BVH::BVHNode));
 		memcpy(params->BVH->m_Bounds, tempBounds, params->BVH->m_Count * sizeof(AABB));
 
 		// Clean up
@@ -338,14 +357,14 @@ namespace BVH
 		stackData[stackPtr++] = currentNode;
 
 		// Front-to-back traversal for early termination
-		while (stackPtr != 0)
+		while (stackPtr != 0) [[likely]]
 		{
 			assert(stackPtr < 16);
 
-			const BVHSoA::BVHNode& node = params->BVH->m_Nodes[currentNode];
+			const BVH::BVHNode& node = params->BVH->m_Nodes[currentNode];
 
 			// Process leaf node
-			if (node.Right == UINT32_MAX)
+			if (node.Right == UINT32_MAX) [[unlikely]]
 			{
 				// Process hit test
 				hitAnything |= Hitables::IntersectPrimitive(ray, tmin, tmax, bestHit, node.Left);
@@ -426,10 +445,8 @@ namespace BVH
 			else // noneHit
 			{
 				currentNode = stackData[--stackPtr];
-				continue;
 			}
 		}
-
 		return hitAnything;
 	}
 
