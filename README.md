@@ -3,26 +3,23 @@
 A high-performance CUDA implementation of "Ray Tracing in One Weekend" that demonstrates the power of GPU optimization through a series of progressive improvements.
 
 ![Ray Tracer Output](assets/2560x1440_50depth_3000samples_3400ms.png)
-*2560x1440 50 max depth, 3000 samples, 3400ms on an RTX 3080.*
+*2560x1440 resolution, 50 max depth, 3000 samples, 3400ms on an RTX 3080.*
 
 ## Performance Journey
 
 This project started as a naive CUDA port running at **2.5 seconds per frame** and was optimized down to **9 milliseconds per frame** - a **277x speedup**! Each optimization tackled specific GPU bottlenecks:
 
-### 🚀 Major Optimizations Implemented
-
-| Optimization               | Improvement                   |
-| -------------------------- | ----------------------------- |
-| Eliminated Recursion       | **8.3x faster**               |
-| Precomputed Bounding Boxes | **1.5x faster**               |
-| Early Ray Termination      | **1.25x faster**              |
-| Structure of Arrays (SoA)  | **2.15x faster**              |
-| Memory Alignment           | **1.25x faster**              |
-| Russian Roulette Sampling  | Early exit for weak rays      |
-| Constant Memory Usage      | Register pressure reduction   |
-| NVIDIA's RNG (PCG+LCG)     | Reduced overhead vs curand    |
-| Branchless Materials       | **~15% warp efficiency gain** |
-| CUDA↔OpenGL Interop        | Eliminated CPU staging        |
+## 🚀 Major Optimizations Implemented
+* Eliminated Recursion       
+* Precomputed Bounding Boxes 
+* Early Ray Termination      
+* Structure of Arrays (SoA)  
+* Memory Alignment           
+* Russian Roulette Sampling  
+* Constant Memory Usage      
+* NVIDIA's RNG (PCG+LCG)     
+* Branchless Materials       
+* CUDA↔OpenGL Interop        
 
 ### 🎯 Key Technical Achievements
 
