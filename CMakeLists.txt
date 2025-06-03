@@ -20,11 +20,12 @@ file(GLOB_RECURSE SRC_FILES
 set(GLM_BUILD_LIBRARY OFF)
 add_subdirectory(Vendor/glm)
 add_subdirectory(Vendor/spdlog)
-add_subdirectory(Vendor/SFML-3.0.0)
 
-# Disable undesired SFML modules
+# Configure SFML for builds BEFORE adding subdirectory
 set(SFML_BUILD_AUDIO OFF CACHE BOOL "Disable SFML Audio module" FORCE)
 set(SFML_BUILD_NETWORK OFF CACHE BOOL "Disable SFML Network module" FORCE)
+
+add_subdirectory(Vendor/SFML)
 
 if(TARGET sfml-main)
   # Exclude the sfml-main target from the ALL build so it doesn't get built by default.
@@ -47,6 +48,14 @@ find_package(CUDAToolkit REQUIRED)
 
 # Create the executable.
 add_executable(${PROJECT_NAME} ${SRC_FILES})
+
+# Set output directories
+set_target_properties(${PROJECT_NAME} PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/x64"
+  ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/x64"
+  LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/x64"
+  VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/x64"
+)
 
 target_link_libraries(${PROJECT_NAME}
   PRIVATE
@@ -120,8 +129,6 @@ if(CMAKE_BUILD_TYPE MATCHES $<OR:<Release,RelWithDebInfo>>)
 endif()
 
 # Link with CUDA runtime library (static) similar to linking cudart_static.lib.
-# Note: Modern CMake’s FindCUDA support will usually handle linking appropriately,
-# but explicitly linking cudart_static is sometimes necessary.
 find_library(CUDART_STATIC_LIBRARY cudart_static
   PATHS
   "$ENV{CUDA_PATH}/lib/x64"
@@ -153,12 +160,12 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
   CXX_EXTENSIONS ON
 )
 
-set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES "86")
+set(CUDA_ARCHITECTURES "86" CACHE STRING "CUDA Architectures")
+set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES ${CUDA_ARCHITECTURES})
 
-# CUDA compile flags for Release only
+# CUDA compile flags
 target_compile_options(${PROJECT_NAME} PRIVATE
   $<$<COMPILE_LANGUAGE:CUDA>:
-
   -arch=sm_86
   -gencode=arch=compute_86,code=sm_86
   --default-stream per-thread
@@ -184,10 +191,19 @@ target_compile_options(${PROJECT_NAME} PRIVATE
   -gencode=arch=compute_86,code=compute_86
   >
 
+  # C++ compiler flags
   $<$<COMPILE_LANGUAGE:CXX>:
   /MP
   /fp:fast
   /arch:AVX2
   /vlen=256
   >
+)
+
+set(PTX_DUMP_PATH "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/x64/PTX_DUMP.txt")
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E echo "Dumping embedded PTX..."
+  COMMAND cuobjdump --dump-ptx --dump-sass "$<TARGET_FILE:${PROJECT_NAME}>" > "${PTX_DUMP_PATH}"
+  COMMENT "Dumping PTX and SASS after build"
 )
