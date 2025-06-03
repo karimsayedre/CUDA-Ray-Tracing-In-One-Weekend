@@ -74,6 +74,9 @@ This project started as a naive CUDA port running at **2.5 seconds per frame** a
    ./Release/RayTracingInOneWeekend.exe
    ```
 
+### **Note**
+   sm120 compilation is currently disabled because it's buggy in CUDA 12.9.
+
 ### CMake Configuration
 
 The project uses a simple CMake setup that automatically detects CUDA and configures the necessary compiler flags for optimal performance.
