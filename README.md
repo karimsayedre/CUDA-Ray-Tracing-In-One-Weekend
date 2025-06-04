@@ -51,7 +51,7 @@ This project started as a naive CUDA port running at **2.5 seconds per frame** a
 1. **Clone the repository**
    ```bash
    git clone https://github.com/karimsayedre/CUDA-Ray-Tracing-In-One-Weekend.git
-   cd cuda-raytracer
+   cd CUDA-Ray-Tracing-In-One-Weekend
    ```
 
 2. **Generate build files**
@@ -68,7 +68,7 @@ This project started as a naive CUDA port running at **2.5 seconds per frame** a
 
 4. **Run the ray tracer**
    ```bash
-   ./Release/RayTracingInOneWeekend.exe
+   ./RayTracingInOneWeekend.sln
    ```
 
 ### **Note**
@@ -89,7 +89,6 @@ The most impactful optimization was restructuring from Object-Oriented Arrays (A
 class Sphere : public Hittable {
     Vec3 center;
     float radius;
-    uint32_t materialIndex;
 };
 ```
 
@@ -98,7 +97,6 @@ class Sphere : public Hittable {
 struct Spheres {
     Vec3*     center;         // packed sequentially
     float*    radius;         // packed sequentially  
-    uint32_t* materialIndex;  // packed sequentially
     uint32_t  count;
 };
 ```
@@ -118,7 +116,7 @@ __device__ bool Hit(const Ray& r, float tMin, float tMax, HitRecord& rec) const
 
 ### Custom Random Number Generation
 
-Used a lightweight PCG+LCG from NVIDIA combination replacing CUDA's curand for significant performance gains in sampling-heavy workloads.
+Used a lightweight PCG+LCG from NVIDIA replacing CUDA's curand for significant performance gains in sampling-heavy workloads.
 
 ## Performance Profiling
 
@@ -139,7 +137,7 @@ Key metrics tracked throughout development:
 
 - [Ray Tracing in One Weekend](https://raytracing.github.io/books/RayTracingInOneWeekend.html) - Original CPU implementation
 - [NVIDIA CUDA Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html) - GPU optimization techniques
-- [Real-Time Rendering](http://www.realtimerendering.com/) - Advanced graphics techniques
+- [Accelerated Ray Tracing in One Weekend in CUDA](https://developer.nvidia.com/blog/accelerated-ray-tracing-cuda/) - Cuda ray tracing in one weekend blog
 - [Nvidia Optix Advanced Samples](https://github.com/nvpro-samples/optix_advanced_samples/blob/master/src/device_include/random.h) - Fast RNG code
 
 ## License
