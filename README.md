@@ -1,4 +1,4 @@
-# CUDA Ray Tracer: From 2.5 Seconds to 9 Milliseconds
+# CPU/GPU CUDA Ray Tracer: From 2.5 Seconds to 9 Milliseconds
 
 A high-performance CUDA implementation of "Ray Tracing in One Weekend" that demonstrates the power of GPU optimization through a series of progressive improvements.
 
@@ -38,6 +38,11 @@ This project started as a naive CUDA port running at **2.5 seconds per frame** a
 - **Direct GPU Rendering**: CUDA↔OpenGL interop for zero-copy display
 - **Frames in flight**: Less waiting for CPU each frame
 
+## Controls
+- Press F2 to toggle between CPU and GPU rendering.
+- Press M to toggle camera movement.
+- Window is resizeable.
+
 ## Build Instructions
 
 ### Prerequisites
@@ -66,7 +71,7 @@ This project started as a naive CUDA port running at **2.5 seconds per frame** a
    cmake --build . 
    ```
 
-4. **Run the ray tracer**
+4. **Run the Visual Studio solution**
    ```bash
    ./RayTracingInOneWeekend.sln
    ```
