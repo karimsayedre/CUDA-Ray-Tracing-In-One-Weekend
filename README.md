@@ -128,14 +128,20 @@ Key metrics tracked throughout development:
 - **Warp occupancy**
 - **Global memory requests**
 
-## Hardware Tested
-
-- **NVIDIA RTX 3080** (Ampere architecture)
-- Results may vary on different GPU architectures
+## Benchmark Results And Tested Hardware
+| GPU / CPU       | 1280x720 | 1920x1080 | 2560x1440 | 3840x2160 |
+| --------------- | -------- | --------- | --------- | --------- |
+| RTX 3080        | 9.12 ms  | 19.5 ms   | 35 ms     | 76 ms     |
+| i5-13600KF      | 450 ms   | 980 ms    | 1770 ms   | 3845 ms   |
+| RTX 3050 Laptop | 27 ms    | 53 ms     | 115 ms    | 256 ms    |
+| i5-13450HX      | 1000 ms  | 2250 ms   | 4565 ms   | 10350 ms  |
+| RTX 4050 Laptop | 20 ms    | 40 ms     | 75 ms     | 165 ms    |
+| i7-13700H       | 725 ms   | 1450 ms   | 2675 ms   | 8284 ms   |
 
 ## References
 
 - [Ray Tracing in One Weekend](https://raytracing.github.io/books/RayTracingInOneWeekend.html) - Original CPU implementation
+- [GPSnoopy's RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan) - RTX Vulkan Ray Tracing 
 - [NVIDIA CUDA Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html) - GPU optimization techniques
 - [Accelerated Ray Tracing in One Weekend in CUDA](https://developer.nvidia.com/blog/accelerated-ray-tracing-cuda/) - Cuda ray tracing in one weekend blog
 - [Nvidia Optix Advanced Samples](https://github.com/nvpro-samples/optix_advanced_samples/blob/master/src/device_include/random.h) - Fast RNG code
