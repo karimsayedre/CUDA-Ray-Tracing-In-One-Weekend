@@ -66,12 +66,7 @@ This project started as a naive CUDA port running at **2.5 seconds per frame** a
    cmake ..
    ```
 
-3. **Build with Visual Studio**
-   ```bash
-   cmake --build . 
-   ```
-
-4. **Run the Visual Studio solution**
+3. **Run the Visual Studio solution**
    ```bash
    ./RayTracingInOneWeekend.sln
    ```
