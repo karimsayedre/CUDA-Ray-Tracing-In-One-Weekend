@@ -2,6 +2,7 @@
 
 #include "CPU_GPU.h"
 #include "Renderer.h"
+#include "AABB.h"
 
 namespace Hitables
 {

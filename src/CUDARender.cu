@@ -63,11 +63,11 @@ void Renderer<ExecutionMode::GPU>::InitWorld()
 }
 
 template<ExecutionMode Mode>
-void Renderer<Mode>::AllocateRaytracingData(int numHitables)
+void Renderer<Mode>::AllocateRaytracingData(const uint32_t numSpheres)
 {
-	dp_List		 = Hitables::Init<Mode>(numHitables);
-	dp_Materials = Mat::Init<Mode>(numHitables);
-	dp_BVH		 = BVH::Init<Mode>(numHitables * 2 - 1);
+	dp_List		 = Hitables::Init<Mode>(numSpheres);
+	dp_Materials = Mat::Init<Mode>(numSpheres);
+	dp_BVH		 = BVH::Init<Mode>(numSpheres * 2 - 1);
 }
 
 __global__ void RenderKernel()

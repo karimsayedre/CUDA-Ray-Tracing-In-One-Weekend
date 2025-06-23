@@ -52,7 +52,7 @@ __host__ std::chrono::duration<float, std::milli> Renderer<ExecutionMode::CPU>::
 				{
 					for (uint32_t x = tileX; x < xEnd; ++x)
 					{
-						const uint32_t pixelIndex = y * params->ResolutionInfo.z + x;
+						const uint32_t pixelIndex = y * size.y + x;
 						uint32_t	   seed		  = params->RandSeeds[pixelIndex];
 						Vec3		   pixelColor { 0.0f };
 

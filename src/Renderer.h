@@ -4,7 +4,6 @@
 #include "Camera.h"
 #include <chrono>
 
-#include "AABB.h"
 #include "CPU_GPU.h"
 #include "SFML/System/Vector2.hpp"
 
@@ -72,7 +71,7 @@ class Renderer
 	Renderer(const sf::Vector2u dims, const uint32_t samplesPerPixel, const uint32_t maxDepth, const float colorMul);
 
 	__host__ void InitWorld();
-	__host__ void AllocateRaytracingData(int numHitables);
+	__host__ void AllocateRaytracingData(uint32_t numSpheres);
 	__host__ void ResizeImage(const sf::Vector2u dims, cudaSurfaceObject_t surface);
 
 	__host__ void CopyDeviceData(const cudaSurfaceObject_t imageSurface) const;
