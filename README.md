@@ -154,6 +154,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE.md) f
 ## Acknowledgments
 
 - Peter Shirley for the original "Ray Tracing in One Weekend" book
+- Tanguy Fautré (<em>GPSnoopy</em>) for maintaining [RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan) — a major reference and learning resource throughout this project
 - NVIDIA for the CUDA toolkit and excellent profiling tools
 - The graphics programming community for optimization insights
+
 
