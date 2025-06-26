@@ -1,6 +1,7 @@
-# CPU/GPU CUDA Ray Tracer: From 2.5 Seconds to 9 Milliseconds
+# CUDA Ray Tracing 2x Faster Than RTX
 
 A high-performance CUDA implementation of "Ray Tracing in One Weekend" that demonstrates the power of GPU optimization through a series of progressive improvements.
+📘 Read the full article: [CUDA Ray Tracing 2x Faster Than RTX](https://karimsayedre.github.io/RTIOW.html)
 
 ![Ray Tracer Output](assets/2560x1440_50depth_3000samples_3400ms.png)
 *2560x1440 resolution, 50 max depth, 3000 samples, 3400ms on an RTX 3080.*
