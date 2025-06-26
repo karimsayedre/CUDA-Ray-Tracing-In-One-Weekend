@@ -397,38 +397,41 @@ namespace BVH
 			uint32_t fartherChild = tEnterL > tEnterR ? node.Left : node.Right;
 
 #else
-			uint32_t closerChild;
-			uint32_t fartherChild;
-			auto	 slabTest = [&](const AABB& b, const bool first) -> bool
+			float tEnterL = 0.0f, tEnterR = 0.0f;
+
+			auto SlabTest = [&](const AABB& b, float& tEnterOut) -> bool
 			{
-				float t0	 = std::fma(invDir.x, b.Min.x, rayOriginMulNegInvDir.x);
-				float t1	 = std::fma(invDir.x, b.Max.x, rayOriginMulNegInvDir.x);
-				float tEnter = glm::max(glm::min(t0, t1), tmin);
-				float tExit	 = glm::min(glm::max(t0, t1), tmax);
+				float tx0	 = std::fma(invDir.x, b.Min.x, rayOriginMulNegInvDir.x);
+				float tx1	 = std::fma(invDir.x, b.Max.x, rayOriginMulNegInvDir.x);
+				float tEnter = glm::max(glm::min(tx0, tx1), tmin);
+				float tExit	 = glm::min(glm::max(tx0, tx1), tmax);
 				if (tExit < tEnter)
 					return false;
 
-				t0	   = std::fma(invDir.y, b.Min.y, rayOriginMulNegInvDir.y);
-				t1	   = std::fma(invDir.y, b.Max.y, rayOriginMulNegInvDir.y);
-				tEnter = glm::max(glm::min(t0, t1), tEnter);
-				tExit  = glm::min(glm::max(t0, t1), tExit);
+				float ty0 = std::fma(invDir.y, b.Min.y, rayOriginMulNegInvDir.y);
+				float ty1 = std::fma(invDir.y, b.Max.y, rayOriginMulNegInvDir.y);
+				tEnter	  = glm::max(glm::min(ty0, ty1), tEnter);
+				tExit	  = glm::min(glm::max(ty0, ty1), tExit);
 				if (tExit < tEnter)
 					return false;
 
-				t0	   = std::fma(invDir.z, b.Min.z, rayOriginMulNegInvDir.z);
-				t1	   = std::fma(invDir.z, b.Max.z, rayOriginMulNegInvDir.z);
-				tEnter = glm::max(glm::min(t0, t1), tEnter);
-				tExit  = glm::min(glm::max(t0, t1), tExit);
+				float tz0 = std::fma(invDir.z, b.Min.z, rayOriginMulNegInvDir.z);
+				float tz1 = std::fma(invDir.z, b.Max.z, rayOriginMulNegInvDir.z);
+				tEnter	  = glm::max(glm::min(tz0, tz1), tEnter);
+				tExit	  = glm::min(glm::max(tz0, tz1), tExit);
 				if (tExit < tEnter)
 					return false;
 
-				closerChild	 = first ? node.Left : node.Right;
-				fartherChild = first ? node.Right : node.Left;
+				tEnterOut = tEnter;
 				return true;
 			};
 
-			const bool hitLeft	= slabTest(params->BVH->m_Bounds[node.Left], true);
-			const bool hitRight = slabTest(params->BVH->m_Bounds[node.Right], false);
+			const bool hitLeft	= SlabTest(params->BVH->m_Bounds[node.Left], tEnterL);
+			const bool hitRight = SlabTest(params->BVH->m_Bounds[node.Right], tEnterR);
+
+			uint32_t closerChild  = tEnterL > tEnterR ? node.Right : node.Left;
+			uint32_t fartherChild = tEnterL > tEnterR ? node.Left : node.Right;
+
 #endif
 
 			// Resolve everything immediately
@@ -444,6 +447,8 @@ namespace BVH
 			}
 			else // noneHit
 			{
+				if (stackPtr == 0)
+					break;
 				currentNode = stackData[--stackPtr];
 			}
 		}
